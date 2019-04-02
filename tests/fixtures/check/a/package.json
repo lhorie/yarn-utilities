@@ -1,0 +1,6 @@
+{
+  "name": "a",
+  "dependencies": {
+    "has": "^1.0.2"
+  }
+}

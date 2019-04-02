@@ -1,0 +1,14 @@
+{
+  "name": "yarn-utilities",
+  "version": "0.0.1",
+  "license": "MIT",
+  "bin": "cli.js",
+  "main": "index.js",
+  "dependencies": {
+    "@yarnpkg/lockfile": "^1.1.0",
+    "semver": "^6.0.0"
+  },
+  "scripts": {
+    "test": "node tests"
+  }
+}
