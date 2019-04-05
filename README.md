@@ -56,7 +56,7 @@ Removes a dependency
 
 Sync transitive deps across multiple projects and dedupe versions in matching ranges
 
-- `type Optimize = (ls: Array<string>) => void`
+- `type Optimize = (ls: Array<string>) => Object`
   - ls - List of folders containing project folders to optimize
 
 #### check
