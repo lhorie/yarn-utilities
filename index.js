@@ -36,10 +36,6 @@ function prune(meta, deps) {
   }
 }
 
-function getDirs(query) {
-  return [].concat(...query.map(root => ls(root).map(dir => `${root}/${dir}`)));
-}
-
 // API
 function add(roots, dep, version, type = 'dependencies') {
   const tmp = `/tmp/yarn-utils-${Math.random() * 1e17}`;
