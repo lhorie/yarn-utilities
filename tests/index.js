@@ -29,23 +29,23 @@ assert(read(`${__dirname}/tmp/remove/yarn.lock`, 'utf8').includes('function-bind
 
 // optimize works
 exec(`cp -r ${__dirname}/fixtures/sync ${__dirname}/tmp/sync`);
-optimize([`${__dirname}/tmp/sync`]);
+optimize([`${__dirname}/tmp/sync/a`, `${__dirname}/tmp/sync/b`]);
 assert(read(`${__dirname}/tmp/sync/b/yarn.lock`, 'utf8').includes('function-bind@^1.1.2'));
 assert(read(`${__dirname}/tmp/sync/b/yarn.lock`, 'utf8').includes('function-bind@^1.1.1') === false);
 
 // optimize's deduping works
 exec(`cp -r ${__dirname}/fixtures/dedupe ${__dirname}/tmp/dedupe`);
-optimize([`${__dirname}/tmp/dedupe`]);
+optimize([`${__dirname}/tmp/dedupe/a`]);
 assert(read(`${__dirname}/tmp/dedupe/a/yarn.lock`, 'utf8').includes('function-bind@^1.1.1, function-bind@^1.1.2'));
 
 // check works
 exec(`cp -r ${__dirname}/fixtures/check ${__dirname}/tmp/check`);
-const {has} = check([`${__dirname}/tmp/check`]);
+const {has} = check([`${__dirname}/tmp/check/a`, `${__dirname}/tmp/check/b`]);
 assert.equal(Object.keys(has).length, 2);
 
 // merge works
 exec(`cp -r ${__dirname}/fixtures/merge ${__dirname}/tmp/merge && rm -rf ${__dirname}/tmp/merge/merged`);
-merge([`${__dirname}/tmp/merge`], `${__dirname}/tmp/merge/merged`);
+merge([`${__dirname}/tmp/merge/a`, `${__dirname}/tmp/merge/b`], `${__dirname}/tmp/merge/merged`);
 assert(read(`${__dirname}/tmp/merge/merged/yarn.lock`, 'utf8').includes('function-bind@^1.1.1'));
 assert(read(`${__dirname}/tmp/merge/merged/yarn.lock`, 'utf8').includes('no-bugs@1.0.0'));
 

@@ -88,8 +88,8 @@ function remove(roots, dep) {
   });
 }
 
-function optimize(groups) {
-  const data = getDirs(groups)
+function optimize(roots) {
+  const data = roots
     .filter(dir => exists(`${dir}/yarn.lock`))
     .map(dir => ({
       meta: `${dir}/package.json`,
@@ -158,7 +158,7 @@ function optimize(groups) {
   });
 }
 
-function check(groups) {
+function check(roots) {
   const versions = {};
   function collectVersions(meta, type) {
     Object.keys(meta[type] || {}).forEach(name => {
@@ -169,7 +169,7 @@ function check(groups) {
     });
   }
 
-  getDirs(groups)
+  roots
     .filter(dir => exists(`${dir}/package.json`))
     .forEach(dir => {
       const meta = JSON.parse(read(`${dir}/package.json`, 'utf8'));
@@ -185,13 +185,13 @@ function check(groups) {
   return versions;
 }
 
-function merge(groups, out) {
-  if (Object.keys(check(groups)).length === 0) {
-    optimize(groups);
+function merge(roots, out) {
+  if (Object.keys(check(roots)).length === 0) {
+    optimize(roots);
 
     let deps = {};
     let lock = {};
-    getDirs(groups)
+    roots
       .filter(dir => exists(`${dir}/package.json`) && exists(`${dir}/yarn.lock`))
       .forEach(dir => {
         const meta = JSON.parse(read(`${dir}/package.json`, 'utf8'));

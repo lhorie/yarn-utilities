@@ -21,18 +21,18 @@ switch (command) {
     break;
   }
   case 'optimize': {
-    const {ls} = parse(args);
-    optimize(ls.split('|'));
+    const {roots} = parse(args);
+    optimize(roots.split('|'));
     break;
   }
   case 'check': {
-    const {ls} = parse(args);
+    const {roots} = parse(args);
     console.log(JSON.stringify(check(ls.split('|')), null, 2));
     break;
   }
   case 'merge': {
-    const {ls, out} = parse(args);
-    merge(ls.split('|'), out);
+    const {roots, out} = parse(args);
+    merge(roots.split('|'), out);
     break;
   }
 }
