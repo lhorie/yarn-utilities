@@ -1,7 +1,21 @@
-const {execSync: exec} = require('child_process');
-const {readdirSync: ls, existsSync: exists, readFileSync: read, writeFileSync: write} = require('fs');
+const proc = require('child_process');
+const {promisify} = require('util');
+const {readFile, writeFile, access} = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
 const semver = require('semver');
+
+const exec = cmd => {
+  return new Promise((resolve, reject) => {
+    proc.exec(cmd, (err, stdout, stderr) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    })
+  });
+};
+const accessFile = promisify(access);
+const exists = filename => accessFile(filename).then(() => true).catch(() => false);
+const read = promisify(readFile);
+const write = promisify(writeFile);
 
 // helpers
 function sort(unordered) {
@@ -36,62 +50,82 @@ function prune(meta, deps) {
   }
 }
 
+async function containing(dirs, files) {
+  const found = await Promise.all(
+    dirs.map(async dir => {
+      return Promise.all(
+        files.map(async file => await exists(`${dir}/${file}`))
+      ).then(found => found.indexOf(false) === -1);
+    })
+  );
+  const output = [];
+  dirs.forEach((dir, i) => {
+    if (found[i]) output.push(dir);
+  });
+  return output;
+}
+
 // API
-function add(roots, dep, version, type = 'dependencies') {
+async function add(roots, dep, version, type = 'dependencies') {
   const tmp = `/tmp/yarn-utils-${Math.random() * 1e17}`;
-  exec(`mkdir -p ${tmp}`);
-  write(`${tmp}/package.json`, '{}');
-  exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
-  version = JSON.parse(read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
-  const added = lockfile.parse(read(`${tmp}/yarn.lock`, 'utf8'));
-  exec(`rm -rf ${tmp}`);
+  await exec(`mkdir -p ${tmp}`);
+  await write(`${tmp}/package.json`, '{}');
+  await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
+  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
+  const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
+  await exec(`rm -rf ${tmp}`);
 
-  roots.forEach(root => {
-    const meta = JSON.parse(read(`${root}/package.json`, 'utf8'));
-    if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
-    if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
-    if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
-    if (meta.optionalDependencies && meta.optionalDependencies[dep]) meta.optionalDependencies[dep] = version;
-    if (!meta[type]) meta[type] = {};
-    meta[type][dep] = version;
-    write(`${root}/package.json`, JSON.stringify(meta, null, 2));
+  return Promise.all(
+    roots.map(async root => {
+      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
+      if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
+      if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
+      if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
+      if (meta.optionalDependencies && meta.optionalDependencies[dep]) meta.optionalDependencies[dep] = version;
+      if (!meta[type]) meta[type] = {};
+      meta[type][dep] = version;
+      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
-    const f = lockfile.parse(read(`${root}/yarn.lock`, 'utf8'));
-    f.object = sort({...f.object, ...added.object});
-    prune(meta, f.object);
-    write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
-  });
+      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
+      f.object = sort({...f.object, ...added.object});
+      prune(meta, f.object);
+      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
+    })
+  );
 }
 
-function upgrade(roots, dep, version) {
-  remove(roots, dep);
-  add(roots, dep, version);
+async function upgrade(roots, dep, version) {
+  await remove(roots, dep);
+  await add(roots, dep, version);
 }
 
-function remove(roots, dep) {
-  roots.forEach(root => {
-    const meta = JSON.parse(read(`${root}/package.json`, 'utf8'));
+async function remove(roots, dep) {
+  return Promise.all(
+    roots.map(async root => {
+      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
 
-    if (meta.dependencies && meta.dependencies[dep]) delete meta.dependencies[dep];
-    if (meta.devDependencies && meta.devDependencies[dep]) delete meta.devDependencies[dep];
-    if (meta.peerDependencies && meta.peerDependencies[dep]) delete meta.peerDependencies[dep];
-    if (meta.optionalDependencies && meta.optionalDependencies[dep]) delete meta.optionalDependencies[dep];
-    write(`${root}/package.json`, JSON.stringify(meta, null, 2));
+      if (meta.dependencies && meta.dependencies[dep]) delete meta.dependencies[dep];
+      if (meta.devDependencies && meta.devDependencies[dep]) delete meta.devDependencies[dep];
+      if (meta.peerDependencies && meta.peerDependencies[dep]) delete meta.peerDependencies[dep];
+      if (meta.optionalDependencies && meta.optionalDependencies[dep]) delete meta.optionalDependencies[dep];
+      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
-    const f = lockfile.parse(read(`${root}/yarn.lock`, 'utf8'));
-    prune(meta, f.object);
-    write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
-  });
+      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
+      prune(meta, f.object);
+      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
+    })
+  );
 }
 
-function optimize(roots) {
-  const data = roots
-    .filter(dir => exists(`${dir}/yarn.lock`))
-    .map(dir => ({
+async function optimize(roots) {
+  const dirs = await containing(roots, ['yarn.lock']);
+  const data = await Promise.all(
+    dirs.map(async dir => ({
       meta: `${dir}/package.json`,
       file: `${dir}/yarn.lock`,
-      lockfile: lockfile.parse(read(`${dir}/yarn.lock`, 'utf8')),
-    }));
+      lockfile: lockfile.parse(await read(`${dir}/yarn.lock`, 'utf8')),
+    }))
+  );
 
   const versions = {};
   const newDeps = {};
@@ -147,14 +181,16 @@ function optimize(roots) {
     });
   });
 
-  data.forEach(d => {
-    const meta = JSON.parse(read(d.meta, 'utf8'));
-    prune(meta, d.lockfile.object);
-    write(d.file, lockfile.stringify(d.lockfile.object), 'utf8');
-  });
+  return Promise.all(
+    data.map(async d => {
+      const meta = JSON.parse(await read(d.meta, 'utf8'));
+      prune(meta, d.lockfile.object);
+      await write(d.file, lockfile.stringify(d.lockfile.object), 'utf8');
+    })
+  );
 }
 
-function check(roots) {
+async function check(roots) {
   const versions = {};
   function collectVersions(meta, type) {
     Object.keys(meta[type] || {}).forEach(name => {
@@ -165,15 +201,16 @@ function check(roots) {
     });
   }
 
-  roots
-    .filter(dir => exists(`${dir}/package.json`))
-    .forEach(dir => {
-      const meta = JSON.parse(read(`${dir}/package.json`, 'utf8'));
+  const dirs = await containing(roots, ['package.json'])
+  await Promise.all(
+    dirs.map(async dir => {
+      const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
       collectVersions(meta, 'dependencies');
       collectVersions(meta, 'devDependencies');
       collectVersions(meta, 'peerDependencies');
       collectVersions(meta, 'optionalDependencies');
-    });
+    })
+  );
   Object.keys(versions).forEach(name => {
     if (Object.keys(versions[name]).length === 1) delete versions[name];
   });
@@ -181,25 +218,26 @@ function check(roots) {
   return versions;
 }
 
-function merge(roots, out) {
-  if (Object.keys(check(roots)).length === 0) {
-    optimize(roots);
+async function merge(roots, out) {
+  if (Object.keys(await check(roots)).length === 0) {
+    await optimize(roots);
 
     let deps = {};
     let lock = {};
-    roots
-      .filter(dir => exists(`${dir}/package.json`) && exists(`${dir}/yarn.lock`))
-      .forEach(dir => {
-        const meta = JSON.parse(read(`${dir}/package.json`, 'utf8'));
+    const dirs = await containing(roots, ['package.json', 'yarn.lock']);
+    await Promise.all(
+      dirs.map(async dir => {
+        const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
         deps = {...deps, ...meta.dependencies, ...meta.devDependencies};
 
-        const f = lockfile.parse(read(`${dir}/yarn.lock`, 'utf8'));
+        const f = lockfile.parse(await read(`${dir}/yarn.lock`, 'utf8'));
         lock = sort({...lock, ...f.object});
-      });
+      })
+    );
 
-    exec(`mkdir -p ${out}`);
-    write(`${out}/package.json`, JSON.stringify({dependencies: deps}, null, 2), 'utf8');
-    write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
+    await exec(`mkdir -p ${out}`);
+    await write(`${out}/package.json`, JSON.stringify({dependencies: deps}, null, 2), 'utf8');
+    await write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
   }
 }
 

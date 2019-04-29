@@ -29,7 +29,7 @@ const {add, upgrade, remove, optimize, check, merge} = require('yarn-utilities')
 
 Adds a dependency
 
-- `type Add = (roots: Array<string>, dep: string, version: string, type: string) => void`
+- `type Add = (roots: Array<string>, dep: string, version: string, type: string) => Promise<void>`
   - roots - List of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
@@ -48,7 +48,7 @@ Upgrades a dependency
 
 Removes a dependency
 
-- `type Remove = (roots: Array<string>, dep: string) => void`
+- `type Remove = (roots: Array<string>, dep: string) => Promise<void>`
   - roots - List of project folders
   - dep - Name of dependency
 
@@ -56,7 +56,7 @@ Removes a dependency
 
 Sync transitive deps across multiple projects and dedupe versions in matching ranges
 
-- `type Optimize = (roots: Array<string>) => void`
+- `type Optimize = (roots: Array<string>) => Promise<void>`
   - roots - List of project folders
 
 #### check
@@ -75,14 +75,14 @@ Returns a report of what dependencies have multiple versions being used across p
 }
 ```
 
-- `type Check = (roots: Array<string>) => {[string]: {[string]: Array<string>}}`
+- `type Check = (roots: Array<string>) => Promise<{[string]: {[string]: Array<string>}}>`
   - roots - List of project folders
 
 #### merge
 
 Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
 
-- `type Merge = (roots: Array<string>, out: string) => void`
+- `type Merge = (roots: Array<string>, out: string) => Promise<void>`
   - roots - List of project folders
   - out - Save resulting `package.json` and `yarn.lock` to this folder
 
