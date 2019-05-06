@@ -65,8 +65,9 @@ Synchronize transitive deps across multiple projects and dedupe versions in matc
 
 Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
 
-- `type Sync = ({roots: Array<string>, tmp: string}) => Promise<void>`
+- `type Sync = ({roots: Array<string>, ignore: Array<string>, tmp: string}) => Promise<void>`
   - roots - List of project folders
+  - ignore - List of project names to ignore
   - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### check
@@ -142,8 +143,9 @@ Synchronize transitive deps across multiple projects and dedupe versions in matc
 
 Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
 
-- `yarn-utilities optimize --roots [roots] --tmp [tmp]`
+- `yarn-utilities optimize --roots [roots] --ignore [ignore] --tmp [tmp]`
   - roots - A pipe separated list of project folders
+  - ignore - A pipe separated list of project names to ignore
   - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### yarn-utilities check

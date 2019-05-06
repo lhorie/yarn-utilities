@@ -190,10 +190,14 @@ async function optimize({roots}) {
   );
 }
 
-async function sync({roots, tmp}) {
-  const addAll = async (root, meta, object, type) => {
+async function sync({roots, ignore = [], tmp}) {
+  const addAll = async (root, meta, object, type, ignore) => {
     const names = Object.keys(meta[type] || {})
-      .filter(name => !object[`${name}@${meta[type][name]}`]);
+      .filter(name => {
+        const needsDownload = !object[`${name}@${meta[type][name]}`];
+        const shouldDownload = !ignore.find(ignored => ignored === name);
+        return needsDownload && shouldDownload;
+      });
     for (const name of names) {
       await add({roots: [root], dep: name, version: meta[type][name], type, tmp})
     }
@@ -205,8 +209,8 @@ async function sync({roots, tmp}) {
       }
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
       const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-      await addAll(root, meta, object, 'dependencies');
-      await addAll(root, meta, object, 'devDependencies');
+      await addAll(root, meta, object, 'dependencies', ignore);
+      await addAll(root, meta, object, 'devDependencies', ignore);
     })
   );
 }

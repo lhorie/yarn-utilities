@@ -66,6 +66,12 @@ async function run() {
   assert((await read(`${__dirname}/tmp/regen/yarn.lock`, 'utf8')).includes('no-bugs@1.0.0'));
   assert((await read(`${__dirname}/tmp/regen/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
 
+  // sync works with `ignore` list
+  await exec(`cp -r ${__dirname}/fixtures/sync-with-ignore ${__dirname}/tmp/sync-with-ignore`);
+  await sync({roots: [`${__dirname}/tmp/sync-with-ignore`], ignore: ['no-bugs']});
+  assert(!(await read(`${__dirname}/tmp/sync-with-ignore/yarn.lock`, 'utf8')).includes('no-bugs@1.0.0'));
+  assert((await read(`${__dirname}/tmp/sync-with-ignore/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
+
   // check works
   await exec(`cp -r ${__dirname}/fixtures/check ${__dirname}/tmp/check`);
   const {has} = await check({roots: [`${__dirname}/tmp/check/a`, `${__dirname}/tmp/check/b`]});
