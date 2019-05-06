@@ -60,6 +60,12 @@ async function run() {
   assert((await read(`${__dirname}/tmp/sync/yarn.lock`, 'utf8')).includes('no-bugs@1.0.0'));
   assert((await read(`${__dirname}/tmp/sync/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
 
+  // sync works with missing yarn.lock
+  await exec(`cp -r ${__dirname}/fixtures/regen ${__dirname}/tmp/regen`);
+  await sync({roots: [`${__dirname}/tmp/regen`]});
+  assert((await read(`${__dirname}/tmp/regen/yarn.lock`, 'utf8')).includes('no-bugs@1.0.0'));
+  assert((await read(`${__dirname}/tmp/regen/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
+
   // check works
   await exec(`cp -r ${__dirname}/fixtures/check ${__dirname}/tmp/check`);
   const {has} = await check({roots: [`${__dirname}/tmp/check/a`, `${__dirname}/tmp/check/b`]});

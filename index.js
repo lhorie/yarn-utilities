@@ -200,6 +200,9 @@ async function sync({roots, tmp}) {
   }
   return Promise.all(
     roots.map(async root => {
+      if (!await exists(`${root}/yarn.lock`)) {
+        await write(`${root}/yarn.lock`, '', 'utf8');
+      }
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
       const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
       await addAll(root, meta, object, 'dependencies');
