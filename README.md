@@ -29,35 +29,45 @@ const {add, upgrade, remove, optimize, check, merge} = require('yarn-utilities')
 
 Adds a dependency
 
-- `type Add = (roots: Array<string>, dep: string, version: string, type: string) => Promise<void>`
+- `type Add = ({roots: Array<string>, dep: string, version: string, type: string, tmp: string}) => Promise<void>`
   - roots - List of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
   - type - whether to add as `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. Defaults to `dependencies`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### upgrade
 
 Upgrades a dependency
 
-- `type Upgrade = (roots: Array<string>, dep: string, version: string) => void`
+- `type Upgrade = ({roots: Array<string>, dep: string, version: string, tmp: string}) => void`
   - roots - List of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### remove
 
 Removes a dependency
 
-- `type Remove = (roots: Array<string>, dep: string) => Promise<void>`
+- `type Remove = ({roots: Array<string>, dep: string}) => Promise<void>`
   - roots - List of project folders
   - dep - Name of dependency
 
 #### optimize
 
-Sync transitive deps across multiple projects and dedupe versions in matching ranges
+Synchronize transitive deps across multiple projects and dedupe versions in matching ranges
 
-- `type Optimize = (roots: Array<string>) => Promise<void>`
+- `type Optimize = ({roots: Array<string>}) => Promise<void>`
   - roots - List of project folders
+
+#### sync
+
+Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
+
+- `type Sync = ({roots: Array<string>, tmp: string}) => Promise<void>`
+  - roots - List of project folders
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### check
 
@@ -75,14 +85,14 @@ Returns a report of what dependencies have multiple versions being used across p
 }
 ```
 
-- `type Check = (roots: Array<string>) => Promise<{[string]: {[string]: Array<string>}}>`
+- `type Check = ({roots: Array<string>}) => Promise<{[string]: {[string]: Array<string>}}>`
   - roots - List of project folders
 
 #### merge
 
 Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
 
-- `type Merge = (roots: Array<string>, out: string) => Promise<void>`
+- `type Merge = ({roots: Array<string>, out: string}) => Promise<void>`
   - roots - List of project folders
   - out - Save resulting `package.json` and `yarn.lock` to this folder
 
@@ -96,20 +106,22 @@ CLI commands and args mirror the API docs above
 
 Adds a dependency
 
-- `yarn-utilities add --roots [roots] --dep [dep] --version [version] --type [type]`
+- `yarn-utilities add --roots [roots] --dep [dep] --version [version] --type [type] --tmp [tmp]`
   - roots - A pipe separated list of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
   - type - whether to add as `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. Defaults to `dependencies`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### yarn-utilities upgrade
 
 Upgrades a dependency
 
-- `yarn-utilities upgrade --roots [roots] --dep [dep] --version [version]`
+- `yarn-utilities upgrade --roots [roots] --dep [dep] --version [version] --tmp [tmp]`
   - roots - A pipe separated list of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### yarn-utilities remove
 
@@ -121,10 +133,18 @@ Removes a dependency
 
 #### yarn-utilities optimize
 
-Sync transitive deps across multiple projects and dedupe versions in matching ranges
+Synchronize transitive deps across multiple projects and dedupe versions in matching ranges
 
-- `yarn-utilities sync --roots [roots]`
+- `yarn-utilities optimize --roots [roots]`
   - roots - A pipe separated list of project folders
+
+#### yarn-utilities sync
+
+Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
+
+- `yarn-utilities optimize --roots [roots] --tmp [tmp]`
+  - roots - A pipe separated list of project folders
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### yarn-utilities check
 

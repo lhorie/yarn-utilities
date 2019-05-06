@@ -1,38 +1,43 @@
 #!/usr/bin/env node
 
-const {add, remove, upgrade, optimize, check, merge} = require('./index.js');
+const {add, remove, upgrade, optimize, sync, check, merge} = require('./index.js');
 
 const [,, command, ...args] = process.argv;
 
 switch (command) {
   case 'add': {
-    const {roots, dep, version, type} = parse(args);
-    add(roots.split('|'), dep, version, type);
+    const {roots, dep, version, type, tmp} = parse(args);
+    add({roots: roots.split('|'), dep, version, type});
     break;
   }
   case 'upgrade': {
-    const {roots, dep, version} = parse(args);
-    upgrade(roots.split('|'), dep);
+    const {roots, dep, version, tmp} = parse(args);
+    upgrade({roots: roots.split('|'), dep});
     break;
   }
   case 'remove': {
     const {roots, dep} = parse(args);
-    remove(roots.split('|'), dep);
+    remove({roots: roots.split('|'), dep});
     break;
   }
   case 'optimize': {
     const {roots} = parse(args);
-    optimize(roots.split('|'));
+    optimize({roots: roots.split('|')});
+    break;
+  }
+  case 'sync': {
+    const {roots, tmp} = parse(args);
+    sync({roots: roots.split('|'), tmp});
     break;
   }
   case 'check': {
     const {roots} = parse(args);
-    console.log(JSON.stringify(check(ls.split('|')), null, 2));
+    console.log(JSON.stringify(check({roots: roots.split('|')}), null, 2));
     break;
   }
   case 'merge': {
     const {roots, out} = parse(args);
-    merge(roots.split('|'), out);
+    merge({roots: roots.split('|'), out});
     break;
   }
 }

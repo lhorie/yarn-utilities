@@ -4,9 +4,9 @@ const {readFile, writeFile, access} = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
 const semver = require('semver');
 
-const exec = cmd => {
+const exec = (cmd, args = {}) => {
   return new Promise((resolve, reject) => {
-    proc.exec(cmd, (err, stdout, stderr) => {
+    proc.exec(cmd, args, (err, stdout, stderr) => {
       if (err) reject(err);
       else resolve(stdout);
     })
@@ -66,8 +66,8 @@ async function containing(dirs, files) {
 }
 
 // API
-async function add(roots, dep, version, type = 'dependencies') {
-  const tmp = `/tmp/yarn-utils-${Math.random() * 1e17}`;
+async function add({roots, dep, version, type = 'dependencies', tmpRoot = '/tmp'}) {
+  const tmp = `${tmpRoot}/yarn-utils-${Math.random() * 1e17}`;
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
   await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
@@ -94,12 +94,12 @@ async function add(roots, dep, version, type = 'dependencies') {
   );
 }
 
-async function upgrade(roots, dep, version) {
-  await remove(roots, dep);
-  await add(roots, dep, version);
+async function upgrade({roots, dep, version, tmp}) {
+  await remove({roots, dep});
+  await add({roots, dep, version, tmp});
 }
 
-async function remove(roots, dep) {
+async function remove({roots, dep}) {
   return Promise.all(
     roots.map(async root => {
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
@@ -117,7 +117,7 @@ async function remove(roots, dep) {
   );
 }
 
-async function optimize(roots) {
+async function optimize({roots}) {
   const dirs = await containing(roots, ['yarn.lock']);
   const data = await Promise.all(
     dirs.map(async dir => ({
@@ -190,7 +190,25 @@ async function optimize(roots) {
   );
 }
 
-async function check(roots) {
+async function sync({roots, tmp}) {
+  const addAll = async (root, meta, object, type) => {
+    const names = Object.keys(meta[type] || {})
+      .filter(name => !object[`${name}@${meta[type][name]}`]);
+    for (const name of names) {
+      await add({roots: [root], dep: name, version: meta[type][name], type, tmp})
+    }
+  }
+  return Promise.all(
+    roots.map(async root => {
+      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
+      const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
+      await addAll(root, meta, object, 'dependencies');
+      await addAll(root, meta, object, 'devDependencies');
+    })
+  );
+}
+
+async function check({roots}) {
   const versions = {};
   function collectVersions(meta, type) {
     Object.keys(meta[type] || {}).forEach(name => {
@@ -218,9 +236,9 @@ async function check(roots) {
   return versions;
 }
 
-async function merge(roots, out) {
-  if (Object.keys(await check(roots)).length === 0) {
-    await optimize(roots);
+async function merge({roots, out}) {
+  if (Object.keys(await check({roots})).length === 0) {
+    await optimize({roots});
 
     let deps = {};
     let lock = {};
@@ -241,4 +259,4 @@ async function merge(roots, out) {
   }
 }
 
-module.exports = {add, upgrade, remove, optimize, check, merge};
+module.exports = {add, upgrade, remove, optimize, sync, check, merge};
