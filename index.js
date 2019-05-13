@@ -66,8 +66,9 @@ async function containing(dirs, files) {
 }
 
 // API
-async function add({roots, dep, version, type = 'dependencies', tmpRoot = '/tmp'}) {
-  const tmp = `${tmpRoot}/yarn-utils-${Math.random() * 1e17}`;
+async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
+  tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
+
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
   await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
@@ -94,9 +95,30 @@ async function add({roots, dep, version, type = 'dependencies', tmpRoot = '/tmp'
   );
 }
 
-async function upgrade({roots, dep, version, tmp}) {
-  await remove({roots, dep});
-  await add({roots, dep, version, tmp});
+async function upgrade({roots, dep, version, tmp = '/tmp'}) {
+  tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
+  await exec(`mkdir -p ${tmp}`);
+  await write(`${tmp}/package.json`, '{}');
+  await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
+  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
+  const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
+  await exec(`rm -rf ${tmp}`);
+
+  return Promise.all(
+    roots.map(async root => {
+      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
+      if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
+      if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
+      if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
+      if (meta.optionalDependencies && meta.optionalDependencies[dep]) meta.optionalDependencies[dep] = version;
+      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
+
+      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
+      f.object = sort({...f.object, ...added.object});
+      prune(meta, f.object);
+      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
+    })
+  );
 }
 
 async function remove({roots, dep}) {

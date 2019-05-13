@@ -33,9 +33,15 @@ async function run() {
   await exec(`mkdir -p ${__dirname}/tmp/upgrade`);
   await write(`${__dirname}/tmp/upgrade/package.json`, '{"dependencies": {"has": "0.0.1"}}');
   await write(`${__dirname}/tmp/upgrade/yarn.lock`, '');
-  await upgrade({roots: [`${__dirname}/tmp/add`], dep: 'has', version: '1.0.3'});
-  assert((await read(`${__dirname}/tmp/add/package.json`, 'utf8')).includes('"has": "1.0.3"'))
-  assert((await read(`${__dirname}/tmp/add/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'))
+  await upgrade({roots: [`${__dirname}/tmp/upgrade`], dep: 'has', version: '1.0.3'});
+  assert((await read(`${__dirname}/tmp/upgrade/package.json`, 'utf8')).includes('"has": "1.0.3"'));
+  assert((await read(`${__dirname}/tmp/upgrade/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
+
+  await exec(`mkdir -p ${__dirname}/tmp/dont-upgrade`);
+  await write(`${__dirname}/tmp/dont-upgrade/package.json`, '{"dependencies": {}}');
+  await write(`${__dirname}/tmp/dont-upgrade/yarn.lock`, '');
+  await upgrade({roots: [`${__dirname}/tmp/dont-upgrade`], dep: 'has', version: '1.0.3'});
+  assert(!(await read(`${__dirname}/tmp/dont-upgrade/package.json`, 'utf8')).includes('"has"'));
 
   // remove works
   await exec(`cp -r ${__dirname}/fixtures/remove ${__dirname}/tmp/remove`);
