@@ -271,11 +271,13 @@ async function merge({roots, out}) {
 
     let deps = {};
     let lock = {};
+    let resolutions = {};
     const dirs = await containing(roots, ['package.json', 'yarn.lock']);
     await Promise.all(
       dirs.map(async dir => {
         const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
         deps = {...deps, ...meta.dependencies, ...meta.devDependencies};
+        resolutions = {...resolutions, ...meta.resolutions};
 
         const f = lockfile.parse(await read(`${dir}/yarn.lock`, 'utf8'));
         lock = sort({...lock, ...f.object});
@@ -283,7 +285,7 @@ async function merge({roots, out}) {
     );
 
     await exec(`mkdir -p ${out}`);
-    await write(`${out}/package.json`, JSON.stringify({dependencies: deps}, null, 2), 'utf8');
+    await write(`${out}/package.json`, JSON.stringify({dependencies: deps, resolutions}, null, 2), 'utf8');
     await write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
   }
 }

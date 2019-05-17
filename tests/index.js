@@ -86,6 +86,7 @@ async function run() {
   // merge works
   await exec(`cp -r ${__dirname}/fixtures/merge ${__dirname}/tmp/merge && rm -rf ${__dirname}/tmp/merge/merged`);
   await merge({roots: [`${__dirname}/tmp/merge/a`, `${__dirname}/tmp/merge/b`], out: `${__dirname}/tmp/merge/merged`});
+  assert((await read(`${__dirname}/tmp/merge/merged/package.json`, 'utf8')).includes('resolutions'));
   assert((await read(`${__dirname}/tmp/merge/merged/yarn.lock`, 'utf8')).includes('function-bind@^1.1.1'));
   assert((await read(`${__dirname}/tmp/merge/merged/yarn.lock`, 'utf8')).includes('no-bugs@1.0.0'));
 

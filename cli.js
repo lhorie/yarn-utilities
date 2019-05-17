@@ -26,7 +26,7 @@ switch (command) {
     break;
   }
   case 'sync': {
-    const {roots, ignore, tmp} = parse(args);
+    const {roots, ignore = '', tmp} = parse(args);
     sync({roots: roots.split('|'), ignore: ignore.split('|'), tmp});
     break;
   }
