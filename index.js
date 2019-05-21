@@ -187,7 +187,9 @@ async function optimize({roots}) {
   Object.keys(versions).forEach(name => {
     Object.keys(versions[name]).forEach(key => {
       Object.keys(versions[name]).forEach(version => {
+        const actualName = key.startsWith('npm:') ? key.match(/npm:([^@]+)/)[1] : name;
         if (
+          name === actualName &&
           semver.satisfies(versions[name][key].version, version) &&
           semver.gte(versions[name][key].version, versions[name][version].version)
         ) {
