@@ -35,6 +35,10 @@ function prune(meta, deps) {
     Object.keys(top).map(name => {
       used[`${name}@${top[name]}`] = true;
     });
+    Object.keys(meta.resolutions || {}).forEach(pattern => {
+      const [name] = pattern.match(/(@[^\/]+\/)?[^\/]+$/i);
+      used[`${name}@${meta.resolutions[pattern]}`] = true;
+    });
     Object.keys(deps).forEach(dep => {
       Object.keys(deps[dep].dependencies || {}).forEach(name => {
         used[`${name}@${deps[dep].dependencies[name]}`] = true;
@@ -69,16 +73,23 @@ async function containing(dirs, files) {
 async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
 
+  const metas = await Promise.all(
+    roots.map(async root => {
+      return JSON.parse(await read(`${root}/package.json`, 'utf8'));
+    })
+  );
+  const resolutions = metas.reduce((memo, meta) => ({...memo, ...meta.resolutions}), {});
+
   await exec(`mkdir -p ${tmp}`);
-  await write(`${tmp}/package.json`, '{}');
+  await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
   await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
   version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
   await exec(`rm -rf ${tmp}`);
 
   return Promise.all(
-    roots.map(async root => {
-      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
+    roots.map(async (root, i) => {
+      const meta = metas[i];
       if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
       if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
       if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
@@ -154,7 +165,7 @@ async function optimize({roots}) {
   data.forEach(d => {
     Object.keys(d.lockfile.object).forEach(key => {
       const dep = d.lockfile.object[key];
-      const [, name, version] = key.match(/^(.*?)@(.*?)$/);
+      const [, name, version] = key.match(/^(.+?)@(.+?)$/);
       if (!versions[name]) versions[name] = {};
       if (!versions[name][version] || semver.gt(dep.version, versions[name][version].version)) {
         versions[name][version] = dep;
