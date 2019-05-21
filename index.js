@@ -175,7 +175,9 @@ async function optimize({roots}) {
           Object.keys(deps).forEach(dep => {
             const depKey = `${dep}@${d.lockfile.object[key].dependencies[dep]}`;
             newDeps[key][depKey] = d.lockfile.object[depKey];
-            collect(newDeps[key][depKey].dependencies);
+            const dependencies = {...newDeps[key][depKey].dependencies};
+            delete dependencies[dep]; // don't overflow stack on circular dep
+            collect(dependencies);
           });
         }
         collect(d.lockfile.object[key].dependencies);
