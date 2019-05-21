@@ -97,6 +97,8 @@ Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a ne
   - roots - List of project folders
   - out - Save resulting `package.json` and `yarn.lock` to this folder
 
+Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
+
 ---
 
 ### CLI
@@ -174,3 +176,5 @@ Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a ne
 - `yarn-utilities merge --roots [roots] --out [out]`
   - roots - A pipe separated list of project folders
   - out - Save resulting `package.json` and `yarn.lock` to this folder
+
+Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
