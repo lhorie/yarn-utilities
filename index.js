@@ -170,17 +170,18 @@ async function optimize({roots}) {
       if (!versions[name][version] || semver.gt(dep.version, versions[name][version].version)) {
         versions[name][version] = dep;
 
-        newDeps[key] = {};
-        function collect(deps = {}) {
+        function collect(key, deps = {}) {
+          if (key in newDeps) return;
+
+          newDeps[key] = {};
           Object.keys(deps).forEach(dep => {
             const depKey = `${dep}@${d.lockfile.object[key].dependencies[dep]}`;
             newDeps[key][depKey] = d.lockfile.object[depKey];
             const dependencies = {...newDeps[key][depKey].dependencies};
-            delete dependencies[dep]; // don't overflow stack on circular dep
-            collect(dependencies);
+            collect(depKey, dependencies);
           });
         }
-        collect(d.lockfile.object[key].dependencies);
+        collect(key, d.lockfile.object[key].dependencies);
       }
     });
   });
