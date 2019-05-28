@@ -261,6 +261,7 @@ async function check({roots}) {
       if (!versions[name]) versions[name] = {};
       if (!versions[name][version]) versions[name][version] = [];
       versions[name][version].push(meta.name);
+      versions[name][version].sort();
     });
   }
 
