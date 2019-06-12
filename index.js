@@ -1,4 +1,5 @@
 const proc = require('child_process');
+const {resolve} = require('path');
 const {promisify} = require('util');
 const {readFile, writeFile, access} = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
@@ -9,20 +10,25 @@ const exec = (cmd, args = {}) => {
     proc.exec(cmd, args, (err, stdout, stderr) => {
       if (err) reject(err);
       else resolve(stdout);
-    })
+    });
   });
 };
 const accessFile = promisify(access);
-const exists = filename => accessFile(filename).then(() => true).catch(() => false);
+const exists = filename =>
+  accessFile(filename)
+    .then(() => true)
+    .catch(() => false);
 const read = promisify(readFile);
 const write = promisify(writeFile);
 
 // helpers
 function sort(unordered) {
   const ordered = {};
-  Object.keys(unordered).sort().forEach(function(key) {
-    ordered[key] = unordered[key];
-  });
+  Object.keys(unordered)
+    .sort()
+    .forEach(function(key) {
+      ordered[key] = unordered[key];
+    });
   return ordered;
 }
 
@@ -70,6 +76,33 @@ async function containing(dirs, files) {
 }
 
 // API
+const readNpmrc = async dir => {
+  const npmrcs = await findNpmrcs(dir);
+  const configs = npmrcs.map(npmrc => {
+    return npmrc
+      .replace(/[#;].*[\r\n]/gm, '')
+      .split('\n')
+      .reduce((memo, line) => {
+        const [key, ...rest] = line.split('=');
+        // TODO handle `key[] = value` syntax
+        if (key) {
+          memo[key.trim()] = rest
+            .join('=')
+            .replace(/\$\{([^}]+)\}/g, (match, key) => process.env[key]);
+        }
+        return memo;
+      }, {});
+  });
+  return Object.assign({}, ...configs.reverse());
+};
+
+const findNpmrcs = async dir => {
+  const npmrcs = [await read(`${dir}/.npmrc`, 'utf8').catch(() => '')];
+  if (resolve(`${dir}/..`) !== '/')
+    npmrcs.push(...(await findNpmrcs(`${dir}/..`)));
+  return npmrcs;
+};
+
 async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
 
@@ -78,22 +111,44 @@ async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
       return JSON.parse(await read(`${root}/package.json`, 'utf8'));
     })
   );
-  const resolutions = metas.reduce((memo, meta) => ({...memo, ...meta.resolutions}), {});
+  const configs = await Promise.all(
+    roots.map(async root => {
+      return await readNpmrc(root);
+    })
+  );
+  const resolutions = metas.reduce(
+    (memo, meta) => ({...memo, ...meta.resolutions}),
+    {}
+  );
 
   await exec(`mkdir -p ${tmp}`);
+  await write(
+    `${tmp}/.npmrc`,
+    Object.keys(configs)
+      .map(key => `${key}=${configs[key]}`)
+      .join('\n')
+  );
   await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
-  await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
-  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
+  await exec(
+    `yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`
+  );
+  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
+    dep
+  ];
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
   await exec(`rm -rf ${tmp}`);
 
   return Promise.all(
     roots.map(async (root, i) => {
       const meta = metas[i];
-      if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
-      if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
-      if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
-      if (meta.optionalDependencies && meta.optionalDependencies[dep]) meta.optionalDependencies[dep] = version;
+      if (meta.dependencies && meta.dependencies[dep])
+        meta.dependencies[dep] = version;
+      if (meta.devDependencies && meta.devDependencies[dep])
+        meta.devDependencies[dep] = version;
+      if (meta.peerDependencies && meta.peerDependencies[dep])
+        meta.peerDependencies[dep] = version;
+      if (meta.optionalDependencies && meta.optionalDependencies[dep])
+        meta.optionalDependencies[dep] = version;
       if (!meta[type]) meta[type] = {};
       meta[type][dep] = version;
       await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
@@ -110,18 +165,26 @@ async function upgrade({roots, dep, version, tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
-  await exec(`yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`);
-  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[dep];
+  await exec(
+    `yarn add ${dep}${version ? `@${version}` : ''} --cwd ${tmp} 2>/dev/null`
+  );
+  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
+    dep
+  ];
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
   await exec(`rm -rf ${tmp}`);
 
   return Promise.all(
     roots.map(async root => {
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-      if (meta.dependencies && meta.dependencies[dep]) meta.dependencies[dep] = version;
-      if (meta.devDependencies && meta.devDependencies[dep]) meta.devDependencies[dep] = version;
-      if (meta.peerDependencies && meta.peerDependencies[dep]) meta.peerDependencies[dep] = version;
-      if (meta.optionalDependencies && meta.optionalDependencies[dep]) meta.optionalDependencies[dep] = version;
+      if (meta.dependencies && meta.dependencies[dep])
+        meta.dependencies[dep] = version;
+      if (meta.devDependencies && meta.devDependencies[dep])
+        meta.devDependencies[dep] = version;
+      if (meta.peerDependencies && meta.peerDependencies[dep])
+        meta.peerDependencies[dep] = version;
+      if (meta.optionalDependencies && meta.optionalDependencies[dep])
+        meta.optionalDependencies[dep] = version;
       await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
       const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
@@ -137,10 +200,14 @@ async function remove({roots, dep}) {
     roots.map(async root => {
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
 
-      if (meta.dependencies && meta.dependencies[dep]) delete meta.dependencies[dep];
-      if (meta.devDependencies && meta.devDependencies[dep]) delete meta.devDependencies[dep];
-      if (meta.peerDependencies && meta.peerDependencies[dep]) delete meta.peerDependencies[dep];
-      if (meta.optionalDependencies && meta.optionalDependencies[dep]) delete meta.optionalDependencies[dep];
+      if (meta.dependencies && meta.dependencies[dep])
+        delete meta.dependencies[dep];
+      if (meta.devDependencies && meta.devDependencies[dep])
+        delete meta.devDependencies[dep];
+      if (meta.peerDependencies && meta.peerDependencies[dep])
+        delete meta.peerDependencies[dep];
+      if (meta.optionalDependencies && meta.optionalDependencies[dep])
+        delete meta.optionalDependencies[dep];
       await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
       const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
@@ -167,7 +234,10 @@ async function optimize({roots}) {
       const dep = d.lockfile.object[key];
       const [, name, version] = key.match(/^(.+?)@(.+?)$/);
       if (!versions[name]) versions[name] = {};
-      if (!versions[name][version] || semver.gt(dep.version, versions[name][version].version)) {
+      if (
+        !versions[name][version] ||
+        semver.gt(dep.version, versions[name][version].version)
+      ) {
         versions[name][version] = dep;
 
         function collect(key, deps = {}) {
@@ -188,17 +258,22 @@ async function optimize({roots}) {
   Object.keys(versions).forEach(name => {
     Object.keys(versions[name]).forEach(key => {
       Object.keys(versions[name]).forEach(version => {
-        const actualName = key.startsWith('npm:') ? key.match(/npm:(.[^@]*)/)[1] : name;
+        const actualName = key.startsWith('npm:')
+          ? key.match(/npm:(.[^@]*)/)[1]
+          : name;
         if (
           name === actualName &&
           semver.satisfies(versions[name][key].version, version) &&
-          semver.gte(versions[name][key].version, versions[name][version].version)
+          semver.gte(
+            versions[name][key].version,
+            versions[name][version].version
+          )
         ) {
-          versions[name][version] = versions[name][key]
+          versions[name][version] = versions[name][key];
         }
-      })
-    })
-  })
+      });
+    });
+  });
 
   Object.keys(versions).forEach(name => {
     Object.keys(versions[name]).forEach(version => {
@@ -209,7 +284,10 @@ async function optimize({roots}) {
           Object.keys(newDeps[key]).forEach(depKey => {
             if (
               !d.lockfile.object[depKey] ||
-              semver.lt(d.lockfile.object[depKey].version, newDeps[key][depKey].version)
+              semver.lt(
+                d.lockfile.object[depKey].version,
+                newDeps[key][depKey].version
+              )
             ) {
               d.lockfile.object[depKey] = newDeps[key][depKey];
             }
@@ -230,19 +308,24 @@ async function optimize({roots}) {
 
 async function sync({roots, ignore = [], tmp}) {
   const addAll = async (root, meta, object, type, ignore) => {
-    const names = Object.keys(meta[type] || {})
-      .filter(name => {
-        const needsDownload = !object[`${name}@${meta[type][name]}`];
-        const shouldDownload = !ignore.find(ignored => ignored === name);
-        return needsDownload && shouldDownload;
-      });
+    const names = Object.keys(meta[type] || {}).filter(name => {
+      const needsDownload = !object[`${name}@${meta[type][name]}`];
+      const shouldDownload = !ignore.find(ignored => ignored === name);
+      return needsDownload && shouldDownload;
+    });
     for (const name of names) {
-      await add({roots: [root], dep: name, version: meta[type][name], type, tmp})
+      await add({
+        roots: [root],
+        dep: name,
+        version: meta[type][name],
+        type,
+        tmp,
+      });
     }
-  }
+  };
   return Promise.all(
     roots.map(async root => {
-      if (!await exists(`${root}/yarn.lock`)) {
+      if (!(await exists(`${root}/yarn.lock`))) {
         await write(`${root}/yarn.lock`, '', 'utf8');
       }
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
@@ -265,7 +348,7 @@ async function check({roots}) {
     });
   }
 
-  const dirs = await containing(roots, ['package.json'])
+  const dirs = await containing(roots, ['package.json']);
   await Promise.all(
     dirs.map(async dir => {
       const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
@@ -301,8 +384,21 @@ async function merge({roots, out}) {
   );
 
   await exec(`mkdir -p ${out}`);
-  await write(`${out}/package.json`, JSON.stringify({dependencies: deps, resolutions}, null, 2), 'utf8');
+  await write(
+    `${out}/package.json`,
+    JSON.stringify({dependencies: deps, resolutions}, null, 2),
+    'utf8'
+  );
   await write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
 }
 
-module.exports = {add, upgrade, remove, optimize, sync, check, merge};
+module.exports = {
+  add,
+  upgrade,
+  remove,
+  optimize,
+  sync,
+  check,
+  merge,
+  readNpmrc,
+};
