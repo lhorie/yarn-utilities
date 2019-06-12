@@ -392,4 +392,13 @@ async function merge({roots, out}) {
   await write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
 }
 
-module.exports = {add, upgrade, remove, optimize, sync, check, merge};
+module.exports = {
+  add,
+  upgrade,
+  remove,
+  optimize,
+  sync,
+  check,
+  merge,
+  readNpmrc,
+};
