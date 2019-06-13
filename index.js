@@ -8,8 +8,11 @@ const semver = require('semver');
 const exec = (cmd, args = {}) => {
   return new Promise((resolve, reject) => {
     proc.exec(cmd, args, (err, stdout, stderr) => {
-      if (err) reject(err);
-      else resolve(stdout);
+      if (err) {
+        console.log(`Error when executing: ${cmd}`);
+        console.log(`Stdout: ${stdout}`);
+        reject(err);
+      } else resolve(stdout);
     });
   });
 };
