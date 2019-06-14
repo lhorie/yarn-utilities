@@ -133,7 +133,7 @@ async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
   );
   await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
   await exec(
-    `yarn add ${dep}${version ? `@${version}` : ''} 2>/dev/null`,
+    `yarn add ${dep}${version ? `@${version}` : ''}`,
     {cwd: tmp}
   );
   version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
@@ -170,7 +170,7 @@ async function upgrade({roots, dep, version, tmp = '/tmp'}) {
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
   await exec(
-    `yarn add ${dep}${version ? `@${version}` : ''} 2>/dev/null`,
+    `yarn add ${dep}${version ? `@${version}` : ''}`,
     {cwd: tmp}
   );
   version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
