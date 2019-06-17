@@ -250,7 +250,7 @@ async function dedupe({roots, onChange}) {
 
           newDeps[key] = {};
           Object.keys(deps).forEach(dep => {
-            const depKey = `${dep}@${d.lockfile.object[key].dependencies[dep]}`;
+            const depKey = `${dep}@${deps[dep]}`;
             newDeps[key][depKey] = d.lockfile.object[depKey];
             const dependencies = {...newDeps[key][depKey].dependencies};
             collect(depKey, dependencies);

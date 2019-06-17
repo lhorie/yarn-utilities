@@ -1,6 +1,6 @@
 {
   "name": "yarn-utilities",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "license": "MIT",
   "bin": "cli.js",
   "main": "index.js",
