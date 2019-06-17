@@ -106,7 +106,9 @@ const findNpmrcs = async dir => {
   return npmrcs;
 };
 
-async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
+async function addDeps({roots, deps, tmp = '/tmp'}) {
+  if (deps.length === 0) return;
+
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
 
   const metas = await Promise.all(
@@ -132,29 +134,35 @@ async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
       .join('\n')
   );
   await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
-  await exec(
-    `yarn add ${dep}${version ? `@${version}` : ''}`,
-    {cwd: tmp}
-  );
-  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
-    dep
-  ];
+
+
+  const args = deps.map(({dep, version, type}) => {
+    return `${dep}${version ? `@${version}` : ''}`;
+  });
+
+  await exec(`yarn add ${args.join(' ')}`, {cwd: tmp});
+  const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
+  deps.map(item => {
+    item.version = meta.dependencies[item.dep];
+  });
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
   await exec(`rm -rf ${tmp}`);
 
   return Promise.all(
     roots.map(async (root, i) => {
       const meta = metas[i];
-      if (meta.dependencies && meta.dependencies[dep])
-        meta.dependencies[dep] = version;
-      if (meta.devDependencies && meta.devDependencies[dep])
-        meta.devDependencies[dep] = version;
-      if (meta.peerDependencies && meta.peerDependencies[dep])
-        meta.peerDependencies[dep] = version;
-      if (meta.optionalDependencies && meta.optionalDependencies[dep])
-        meta.optionalDependencies[dep] = version;
-      if (!meta[type]) meta[type] = {};
-      meta[type][dep] = version;
+      deps.forEach(({dep, version, type}) => {
+        if (meta.dependencies && meta.dependencies[dep])
+          meta.dependencies[dep] = version;
+        if (meta.devDependencies && meta.devDependencies[dep])
+          meta.devDependencies[dep] = version;
+        if (meta.peerDependencies && meta.peerDependencies[dep])
+          meta.peerDependencies[dep] = version;
+        if (meta.optionalDependencies && meta.optionalDependencies[dep])
+          meta.optionalDependencies[dep] = version;
+        if (!meta[type]) meta[type] = {};
+        meta[type][dep] = version;
+      })
       await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
       const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
@@ -164,18 +172,17 @@ async function add({roots, dep, version, type = 'dependencies', tmp = '/tmp'}) {
     })
   );
 }
+async function add({roots, dep, version, type = 'dependencies', tmp}) {
+  return addDeps({roots, deps: [{dep, version, type}], tmp});
+}
 
 async function upgrade({roots, dep, version, tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
-  await exec(
-    `yarn add ${dep}${version ? `@${version}` : ''}`,
-    {cwd: tmp}
-  );
-  version = JSON.parse(await read(`${tmp}/package.json`, 'utf8')).dependencies[
-    dep
-  ];
+  await exec(`yarn add ${dep}${version ? `@${version}` : ''}`, {cwd: tmp});
+  const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
+  version = meta.dependencies[dep];
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
   await exec(`rm -rf ${tmp}`);
 
@@ -323,15 +330,10 @@ async function sync({roots, ignore = [], tmp}) {
       const shouldDownload = !ignore.find(ignored => ignored === name);
       return needsDownload && shouldDownload;
     });
-    for (const name of names) {
-      await add({
-        roots: [root],
-        dep: name,
-        version: meta[type][name],
-        type,
-        tmp,
-      });
-    }
+    const deps = names.map(name => {
+      return {dep: name, version: meta[type][name], type};
+    });
+    await addDeps({roots: [root], deps, tmp});
   };
   return Promise.all(
     roots.map(async root => {
