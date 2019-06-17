@@ -222,7 +222,7 @@ async function remove({roots, dep}) {
   );
 }
 
-async function optimize({roots}) {
+async function dedupe({roots, onChange}) {
   const dirs = await containing(roots, ['yarn.lock']);
   const data = await Promise.all(
     dirs.map(async dir => ({
@@ -285,6 +285,7 @@ async function optimize({roots}) {
       data.forEach(d => {
         const key = `${name}@${version}`;
         if (d.lockfile.object[key]) {
+          if (typeof onChange === 'function') onChange(key, versions[name][version]);
           d.lockfile.object[key] = versions[name][version];
           Object.keys(newDeps[key]).forEach(depKey => {
             if (
@@ -294,6 +295,7 @@ async function optimize({roots}) {
                 newDeps[key][depKey].version
               )
             ) {
+              if (typeof onChange === 'function') onChange(depKey, newDeps[key][depKey]);
               d.lockfile.object[depKey] = newDeps[key][depKey];
             }
           });
@@ -309,6 +311,9 @@ async function optimize({roots}) {
       await write(d.file, lockfile.stringify(d.lockfile.object), 'utf8');
     })
   );
+}
+async function optimize({roots}) {
+  return dedupe({roots});
 }
 
 async function sync({roots, ignore = [], tmp}) {
@@ -370,8 +375,15 @@ async function check({roots}) {
   return versions;
 }
 
-async function merge({roots, out}) {
-  await optimize({roots});
+async function merge({roots, out, frozenLockfile}) {
+  await dedupe({
+    roots,
+    onChange(dep, value) {
+      if (frozenLockfile) {
+        throw new Error(`Deduping transitive dependency ranges is not allowed when in frozen lockfile mode. Update your lockfile in ${roots}`);
+      }
+    }
+  });
 
   let deps = {};
   let lock = {};

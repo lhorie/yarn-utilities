@@ -22,7 +22,7 @@ When working from a development machine within a large scale monorepo, it's pref
 ### API
 
 ```
-const {add, upgrade, remove, optimize, check, merge} = require('yarn-utilities');
+const {add, upgrade, remove, optimize, sync, check, merge} = require('yarn-utilities');
 ```
 
 #### add
@@ -93,9 +93,10 @@ Returns a report of what dependencies have multiple versions being used across p
 
 Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
 
-- `type Merge = ({roots: Array<string>, out: string}) => Promise<void>`
+- `type Merge = ({roots: Array<string>, out: string, frozenLockfile: boolean}) => Promise<void>`
   - roots - List of project folders
   - out - Save resulting `package.json` and `yarn.lock` to this folder
+  - frozenLockfile - If true and a lockfile change is required to dedupe transitive deps, throws an error. Useful for blocking CI in case of a commit with outdated lockfiles.
 
 Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
 
