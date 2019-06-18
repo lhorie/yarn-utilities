@@ -7,13 +7,15 @@ const semver = require('semver');
 
 const exec = (cmd, args = {}) => {
   return new Promise((resolve, reject) => {
-    proc.exec(cmd, args, (err, stdout, stderr) => {
+    const child = proc.exec(cmd, args, (err, stdout, stderr) => {
       if (err) {
         console.log(`Error when executing: ${cmd}`);
         console.log(`Stdout: ${stdout}`);
         reject(err);
       } else resolve(stdout);
     });
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
   });
 };
 const accessFile = promisify(access);
@@ -140,7 +142,7 @@ async function addDeps({roots, deps, tmp = '/tmp'}) {
     return `${dep}${version ? `@${version}` : ''}`;
   });
 
-  await exec(`yarn add ${args.join(' ')}`, {cwd: tmp});
+  await exec(`yarn add ${args.join(' ')}`, {cwd: tmp, maxBuffer: 1e9});
   const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
   deps.map(item => {
     item.version = meta.dependencies[item.dep];
@@ -180,7 +182,7 @@ async function upgrade({roots, dep, version, tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
-  await exec(`yarn add ${dep}${version ? `@${version}` : ''}`, {cwd: tmp});
+  await exec(`yarn add ${dep}${version ? `@${version}` : ''}`, {cwd: tmp, maxBuffer: 1e9});
   const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
   version = meta.dependencies[dep];
   const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
