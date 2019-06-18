@@ -259,6 +259,11 @@ async function dedupe({roots, onChange}) {
           Object.keys(deps).forEach(dep => {
             const depKey = `${dep}@${deps[dep]}`;
             newDeps[key][depKey] = d.lockfile.object[depKey];
+            if (!newDeps[key][depKey]) {
+              throw new Error(
+                `${d.file} is corrupted (missing entry for ${depKey}, which is a dependency of ${key}). Regenerate the yarn.lock file`
+              );
+            }
             const dependencies = {...newDeps[key][depKey].dependencies};
             collect(depKey, dependencies);
           });
