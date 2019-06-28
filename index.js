@@ -1,6 +1,8 @@
+// @noflow
 const proc = require('child_process');
 const {resolve} = require('path');
 const {promisify} = require('util');
+const {cpus} = require('os');
 const {readFile, writeFile, access} = require('fs');
 const lockfile = require('@yarnpkg/lockfile');
 const semver = require('semver');
@@ -80,7 +82,13 @@ async function containing(dirs, files) {
   return output;
 }
 
-// API
+async function chunk(items, fn) {
+  const size = cpus().length;
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
+  }
+}
+
 const readNpmrc = async dir => {
   const npmrcs = await findNpmrcs(dir);
   const configs = npmrcs.map(npmrc => {
@@ -108,6 +116,13 @@ const findNpmrcs = async dir => {
   return npmrcs;
 };
 
+const download = async (deps, tmp) => {
+  const cmd = `yarn add ${deps.join(' ')}`;
+  const opts = {cwd: tmp, maxBuffer: 1e9};
+  await exec(cmd, opts).catch(() => exec(cmd, opts));
+}
+
+// API
 async function addDeps({roots, deps, tmp = '/tmp'}) {
   if (deps.length === 0) return;
 
@@ -137,12 +152,10 @@ async function addDeps({roots, deps, tmp = '/tmp'}) {
   );
   await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
 
-
   const args = deps.map(({dep, version, type}) => {
     return `${dep}${version ? `@${version}` : ''}`;
   });
-
-  await exec(`yarn add ${args.join(' ')}`, {cwd: tmp, maxBuffer: 1e9});
+  await download(args, tmp);
   const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
   deps.map(item => {
     item.version = meta.dependencies[item.dep];
@@ -254,7 +267,7 @@ async function dedupe({roots, onChange}) {
       ) {
         versions[name][version] = dep;
 
-        function collect(key, deps = {}) {
+        const collect = function(key, deps = {}) {
           if (key in newDeps) return;
 
           newDeps[key] = {};
@@ -342,17 +355,15 @@ async function sync({roots, ignore = [], tmp}) {
     });
     await addDeps({roots: [root], deps, tmp});
   };
-  return Promise.all(
-    roots.map(async root => {
-      if (!(await exists(`${root}/yarn.lock`))) {
-        await write(`${root}/yarn.lock`, '', 'utf8');
-      }
-      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-      const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-      await addAll(root, meta, object, 'dependencies', ignore);
-      await addAll(root, meta, object, 'devDependencies', ignore);
-    })
-  );
+  await chunk(roots, async root => {
+    if (!(await exists(`${root}/yarn.lock`))) {
+      await write(`${root}/yarn.lock`, '', 'utf8');
+    }
+    const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
+    const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
+    await addAll(root, meta, object, 'dependencies', ignore);
+    await addAll(root, meta, object, 'devDependencies', ignore);
+  });
 }
 
 async function check({roots}) {
