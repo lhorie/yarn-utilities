@@ -88,7 +88,7 @@ async function run() {
   await exec(`mkdir -p ${__dirname}/tmp/upgrade`);
   await write(
     `${__dirname}/tmp/upgrade/package.json`,
-    '{"dependencies": {"has": "0.0.1"}}'
+    '{"dependencies": {"has": "0.0.1", "is-number": "1.0.0"}}'
   );
   await write(`${__dirname}/tmp/upgrade/yarn.lock`, '');
   await upgrade({
@@ -104,6 +104,17 @@ async function run() {
   assert(
     (await read(`${__dirname}/tmp/upgrade/yarn.lock`, 'utf8')).includes(
       'function-bind@^1.1.1'
+    )
+  );
+  await upgrade({
+    roots: [`${__dirname}/tmp/upgrade`],
+    dep: 'is-number',
+    version: '1.1.1',
+    from: '1.1.0',
+  });
+  assert(
+    (await read(`${__dirname}/tmp/upgrade/package.json`, 'utf8')).includes(
+      '"is-number": "1.0.0"'
     )
   );
 

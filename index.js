@@ -122,6 +122,14 @@ const download = async (deps, tmp) => {
   await exec(cmd, opts).catch(() => exec(cmd, opts));
 }
 
+const update = (meta, type, name, version, from) => {
+  if (meta[type] && meta[type][name]) {
+    const min = semver.minVersion(meta[type][name]);
+    const inRange = !from || semver.satisfies(min, from);
+    if (inRange) meta[type][name] = version;
+  }
+};
+
 // API
 async function addDeps({roots, deps, tmp = '/tmp'}) {
   if (deps.length === 0) return;
@@ -191,7 +199,7 @@ async function add({roots, dep, version, type = 'dependencies', tmp}) {
   return addDeps({roots, deps: [{dep, version, type}], tmp});
 }
 
-async function upgrade({roots, dep, version, tmp = '/tmp'}) {
+async function upgrade({roots, dep, version, from, tmp = '/tmp'}) {
   tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
   await exec(`mkdir -p ${tmp}`);
   await write(`${tmp}/package.json`, '{}');
@@ -204,14 +212,10 @@ async function upgrade({roots, dep, version, tmp = '/tmp'}) {
   return Promise.all(
     roots.map(async root => {
       const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-      if (meta.dependencies && meta.dependencies[dep])
-        meta.dependencies[dep] = version;
-      if (meta.devDependencies && meta.devDependencies[dep])
-        meta.devDependencies[dep] = version;
-      if (meta.peerDependencies && meta.peerDependencies[dep])
-        meta.peerDependencies[dep] = version;
-      if (meta.optionalDependencies && meta.optionalDependencies[dep])
-        meta.optionalDependencies[dep] = version;
+      update(meta, 'dependencies', dep, version, from);
+      update(meta, 'devDependencies', dep, version, from);
+      update(meta, 'peerDependencies', dep, version, from);
+      update(meta, 'optionalDependencies', dep, version, from);
       await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
 
       const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));

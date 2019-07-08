@@ -40,10 +40,11 @@ Adds a dependency
 
 Upgrades a dependency
 
-- `type Upgrade = ({roots: Array<string>, dep: string, version: string, tmp: string}) => void`
+- `type Upgrade = ({roots: Array<string>, dep: string, version: string, from: string, tmp: string}) => void`
   - roots - List of project folders
   - dep - Name of dependency
   - version - Version to install. Defaults to latest
+  - from - Upgrade only if the minimum version of the current range satisfies the `from` range
   - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
 
 #### remove
