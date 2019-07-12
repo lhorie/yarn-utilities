@@ -316,7 +316,9 @@ async function dedupe({roots, onChange}) {
       data.forEach(d => {
         const key = `${name}@${version}`;
         if (d.lockfile.object[key]) {
-          if (typeof onChange === 'function') onChange(key, versions[name][version]);
+          if (typeof onChange === 'function' && versions[name][version] !== d.lockfile.object[key]) {
+            onChange(key, versions[name][version], d.lockfile.object[key]);
+          }
           d.lockfile.object[key] = versions[name][version];
           Object.keys(newDeps[key]).forEach(depKey => {
             if (
@@ -326,7 +328,9 @@ async function dedupe({roots, onChange}) {
                 newDeps[key][depKey].version
               )
             ) {
-              if (typeof onChange === 'function') onChange(depKey, newDeps[key][depKey]);
+              if (typeof onChange === 'function' && newDeps[key][depKey] !== d.lockfile.object[depKey]) {
+                onChange(depKey, newDeps[key][depKey], d.lockfile.object[depKey]);
+              }
               d.lockfile.object[depKey] = newDeps[key][depKey];
             }
           });
@@ -402,7 +406,7 @@ async function check({roots}) {
 async function merge({roots, out, frozenLockfile}) {
   await dedupe({
     roots,
-    onChange(dep, value) {
+    onChange(dep, value, old) {
       if (frozenLockfile) {
         throw new Error(`Deduping transitive dependency ranges is not allowed when in frozen lockfile mode. Update your lockfile in ${roots}`);
       }
