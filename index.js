@@ -29,7 +29,7 @@ const runCLI /*: RunCLI */ = async argv => {
         --ignore [ignore]    pipe separated list of package names to ignore
         --tmp [tmp]          folder to download temp files to`,
         async ({roots, name, type, ignore, tmp}) => add({
-          roots: parseList(roots),
+          roots: parseDirs(roots),
           additions: parseEntries(name, type),
           ignore: parseList(ignore),
           tmp,
@@ -43,7 +43,7 @@ const runCLI /*: RunCLI */ = async argv => {
         --ignore [ignore]    pipe separated list of package names to ignore
         --tmp [tmp]          folder to download temp files to`,
         async ({roots, name, ignore, tmp}) => remove({
-          roots: parseList(roots),
+          roots: parseDirs(roots),
           removals: parseList(name),
           ignore: parseList(ignore),
           tmp,
@@ -58,7 +58,7 @@ const runCLI /*: RunCLI */ = async argv => {
         --ignore [ignore]    pipe separated list of package names to ignore
         --tmp [tmp]          folder to download temp files to`,
         async ({roots, name, from, ignore, tmp}) => upgrade({
-          roots: parseList(roots),
+          roots: parseDirs(roots),
           additions: parseEntries(name),
           from: parseEntries(from),
           ignore: parseList(ignore),
@@ -72,7 +72,7 @@ const runCLI /*: RunCLI */ = async argv => {
         --ignore [ignore]    pipe separated list of package names to ignore
         --tmp [tmp]          folder to download temp files to`,
         async ({roots, ignore, tmp}) => sync({
-          roots: parseList(roots),
+          roots: parseDirs(roots),
           ignore: parseList(ignore),
           tmp,
         }),
@@ -85,8 +85,8 @@ const runCLI /*: RunCLI */ = async argv => {
         --ignore [ignore]    pipe separated list of package names to ignore
         --tmp [tmp]          folder to download temp files to`,
         async ({roots, out, ignore, tmp}) => merge({
-          roots: parseList(roots),
-          out,
+          roots: parseDirs(roots),
+          out: `${process.cwd()}/${out}`,
           ignore: parseList(ignore),
           tmp,
         }),
@@ -97,7 +97,7 @@ const runCLI /*: RunCLI */ = async argv => {
         --roots [roots]      pipe separated list of dirs`,
         async ({roots}) => {
           const report = check({
-            roots: parseList(roots),
+            roots: parseDirs(roots),
           });
           console.log(report);
         },
@@ -107,6 +107,8 @@ const runCLI /*: RunCLI */ = async argv => {
   );
 }
 
+const parseDirs = string => parseList(string).map(d => `${process.cwd()}/${d}`);
+
 const parseEntries = (additions, type = 'dependencies') => {
   return additions.split('|').map(a => {
     const [name, range] = a.split('@');
@@ -114,6 +116,6 @@ const parseEntries = (additions, type = 'dependencies') => {
   })
 };
 
-const parseList = string => string.split('|').filter(Boolean);
+const parseList = (string = '') => string.split('|').filter(Boolean);
 
 module.exports = {runCLI, add, remove, upgrade, sync, merge, check};
