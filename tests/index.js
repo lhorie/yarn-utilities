@@ -92,7 +92,6 @@ const testUpgrade = async () => {
 const testMerge = async () => {
   await exec(`cp -r ${__dirname}/fixtures/merge ${__dirname}/tmp/merge`);
   // $FlowFixMe
-  /*
   await assert.rejects(
     merge({
       roots: [`${__dirname}/tmp/merge/a`, `${__dirname}/tmp/merge/b`],
@@ -100,7 +99,6 @@ const testMerge = async () => {
       frozenLockfile: true,
     })
   );
-  */
 
   await merge({
     roots: [`${__dirname}/tmp/merge/a`, `${__dirname}/tmp/merge/b`],
