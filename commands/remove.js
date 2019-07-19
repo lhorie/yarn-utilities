@@ -12,7 +12,12 @@ export type RemoveArgs = {
 }
 export type Remove = (RemoveArgs) => Promise<void>;
 */
-const remove /*: Remove */ = async ({roots, removals, ignore, tmp}) => {
+const remove /*: Remove */ = async ({
+  roots,
+  removals,
+  ignore = [],
+  tmp = '/tmp',
+}) => {
   const metas = await getMetadata({roots});
   const updated = await applyMetadataChanges({
     metas,

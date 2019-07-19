@@ -56,11 +56,10 @@ Upgrades dependencies
 - ```js
   type Upgrade = ({
     roots: Array<string>,
-    dep: string, version: string,
     additions: Array<Entry>,
-    from: Array<Entry>,
-    ignore: Array<string>,
-    tmp: string,
+    from?: Array<Entry>,
+    ignore?: Array<string>,
+    tmp?: string,
   }) => Promise<void>
 
   type Entry = {name: string, range: string, type: string}

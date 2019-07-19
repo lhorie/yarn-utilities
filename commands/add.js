@@ -14,7 +14,12 @@ export type AddArgs = {
 }
 export type Add = (AddArgs) => Promise<void>;
 */
-const add /*: Add */ = async ({roots, additions, ignore, tmp}) => {
+const add /*: Add */ = async ({
+  roots,
+  additions,
+  ignore = [],
+  tmp = '/tmp',
+}) => {
   const metas = await getMetadata({roots});
   const updated = await applyMetadataChanges({
     metas,

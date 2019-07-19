@@ -11,7 +11,11 @@ export type SyncArgs = {
 };
 export type Sync = (SyncArgs) => Promise<void>;
 */
-const sync /*: Sync */ = async ({roots, ignore = [], tmp}) => {
+const sync /*: Sync */ = async ({
+  roots,
+  ignore = [],
+  tmp = '/tmp',
+}) => {
   const metas = await getMetadata({roots});
   const updated = await applyMetadataChanges({
     metas,

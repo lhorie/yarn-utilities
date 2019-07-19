@@ -1,6 +1,8 @@
 // @flow
 const assert = require('assert');
 const {exec, read} = require('../utils/node-helpers.js');
+const {add} = require('../commands/add.js');
+const {remove} = require('../commands/remove.js');
 const {upgrade} = require('../commands/upgrade.js');
 const {merge} = require('../commands/merge.js');
 const {check} = require('../commands/check.js');
@@ -25,6 +27,8 @@ async function runTests() {
   await exec(`mkdir -p ${__dirname}/tmp`);
 
   await Promise.all([
+    t(testAdd),
+    t(testRemove),
     t(testUpgrade),
     t(testMerge),
     t(testCheck),
@@ -32,6 +36,36 @@ async function runTests() {
 
   await exec(`rm -rf ${__dirname}/tmp`);
   console.log('All tests pass');
+}
+
+const testAdd = async () => {
+  await exec(`cp -r ${__dirname}/fixtures/add ${__dirname}/tmp/add`);
+  await add({
+    roots: [`${__dirname}/tmp/add`],
+    additions: [
+      {name: 'has', range: '^1.0.3', type: 'dependencies'},
+    ],
+  });
+  const meta = await read(`${__dirname}/tmp/add/package.json`, 'utf8');
+  assert(meta.includes('"has": "^1.0.3"'));
+
+  const lock = await read(`${__dirname}/tmp/add/yarn.lock`, 'utf8');
+  assert(lock.includes('has@^1.0.3'));
+  assert(lock.includes('function-bind@^1.1.1'));
+};
+
+const testRemove = async () => {
+  await exec(`cp -r ${__dirname}/fixtures/remove ${__dirname}/tmp/remove`);
+  await remove({
+    roots: [`${__dirname}/tmp/remove`],
+    removals: ['has'],
+  });
+  const meta = await read(`${__dirname}/tmp/remove/package.json`, 'utf8');
+  assert(!meta.includes('"has": "^1.0.3"'));
+
+  const lock = await read(`${__dirname}/tmp/remove/yarn.lock`, 'utf8');
+  assert(!lock.includes('has@^1.0.3'));
+  assert(!lock.includes('function-bind@^1.1.1'));
 }
 
 const testUpgrade = async () => {

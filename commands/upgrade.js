@@ -18,9 +18,9 @@ export type Upgrade = (UpgradeArgs) => Promise<void>;
 const upgrade /*: Upgrade */ = async ({
   roots,
   additions,
-  from,
-  ignore,
-  tmp,
+  from = [],
+  ignore = [],
+  tmp = '/tmp',
 }) => {
   const removals = additions.map(addition => addition.name);
   const metas = await getMetadata({roots});

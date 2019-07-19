@@ -21,8 +21,12 @@ const getAdditionalDeps /*: GetAdditionalDeps */ = ({
       // check if it was previously removed
       // if so, this is an upgrade, and additions must match removal types
       const found = removed.filter(removal => removal.name === addition.name);
-      for (const item of found) {
-        deps.push({...addition, type: item.type});
+      if (found.length > 0) {
+        for (const item of found) {
+          deps.push({...addition, type: item.type});
+        }
+      } else if (removed.length === 0) {
+        deps.push(addition);
       }
     }
     return {dir, deps};
