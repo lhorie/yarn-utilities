@@ -31,6 +31,8 @@ const downloadMetadata /*: AddDeps */ = async ({
 
     if (frozenLockfile && pkg.deps.length > 0) throwEditError();
 
+    await exec(`mkdir -p ${cwd}`);
+
     await Promise.all(
       pkg.deps.map(async dep => {
         if (!dep.range) {
@@ -52,7 +54,6 @@ const downloadMetadata /*: AddDeps */ = async ({
       }
     }
 
-    await exec(`mkdir -p ${cwd}`);
     await write(`${cwd}/package.json`, JSON.stringify(meta, null, 2), 'utf8');
     await exec(`yarn --ignore-scripts --ignore-engines`, {
       env: process.env,
