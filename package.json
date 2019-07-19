@@ -1,6 +1,6 @@
 {
   "name": "yarn-utilities",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "license": "MIT",
   "bin": "cli.js",
   "main": "index.js",
@@ -8,7 +8,13 @@
     "@yarnpkg/lockfile": "^1.1.0",
     "semver": "^6.0.0"
   },
+  "devDependencies": {
+    "eslint": "^6.0.1",
+    "flow-bin": "^0.102.0"
+  },
   "scripts": {
-    "test": "node tests"
+    "test": "node tests",
+    "lint": "eslint .",
+    "flow": "flow check"
   }
 }

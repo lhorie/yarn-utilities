@@ -1,8 +1,6 @@
 {
+  "name": "a",
   "dependencies": {
-    "has": "1.0.3"
-  },
-  "resolutions": {
-    "has/**/function-bind": "1.0.0"
+    "has": "1.0.2"
   }
 }

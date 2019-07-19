@@ -1,449 +1,119 @@
-// @noflow
-const proc = require('child_process');
-const {resolve} = require('path');
-const {promisify} = require('util');
-const {cpus} = require('os');
-const {readFile, writeFile, access} = require('fs');
-const lockfile = require('@yarnpkg/lockfile');
-const semver = require('semver');
+// @flow
+const {parse} = require('./utils/parse-argv.js');
+const {cli} = require('./utils/cli.js');
+const {add} = require('./commands/add.js');
+const {remove} = require('./commands/remove.js');
+const {upgrade} = require('./commands/upgrade.js');
+const {sync} = require('./commands/sync.js');
+const {merge} = require('./commands/merge.js');
+const {check} = require('./commands/check.js');
+const {version} = require('./package.json');
 
-const exec = (cmd, args = {}) => {
-  return new Promise((resolve, reject) => {
-    const child = proc.exec(cmd, args, (err, stdout, stderr) => {
-      if (err) {
-        console.log(`Error when executing: ${cmd}`);
-        console.log(`Stdout: ${stdout}`);
-        reject(err);
-      } else resolve(stdout);
-    });
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
-  });
-};
-const accessFile = promisify(access);
-const exists = filename =>
-  accessFile(filename)
-    .then(() => true)
-    .catch(() => false);
-const read = promisify(readFile);
-const write = promisify(writeFile);
+/*::
+export type RunCLI = (Array<string>) => Promise<void>;
+*/
+const runCLI /*: RunCLI */ = async argv => {
+  const [command, ...rest] = argv;
+  const args = parse(rest);
+  await cli(
+    command,
+    args,
+    {
+      version: [`Display the version number`, async () => console.log(version)],
+      add: [
+        `Adds dependencies
 
-// helpers
-function sort(unordered) {
-  const ordered = {};
-  Object.keys(unordered)
-    .sort()
-    .forEach(function(key) {
-      ordered[key] = unordered[key];
-    });
-  return ordered;
-}
+        [additions]          pipe separated list of deps (in foo@^0.0.0 format)
+        --roots [roots]      pipe separated list of dirs
+        --type               dependencies or devDependencies
+        --ignore [ignore]    pipe separated list of package names to ignore
+        --tmp [tmp]          folder to download temp files to`,
+        async ({roots, name, type, ignore, tmp}) => add({
+          roots: parseList(roots),
+          additions: parseEntries(name, type),
+          ignore: parseList(ignore),
+          tmp,
+        }),
+      ],
+      remove: [
+        `Removes dependencies
 
-function prune(meta, deps) {
-  const top = {...meta.dependencies, ...meta.devDependencies};
+        [removals]           pipe separated list of package names
+        --roots [roots]      pipe separated list of dirs
+        --ignore [ignore]    pipe separated list of package names to ignore
+        --tmp [tmp]          folder to download temp files to`,
+        async ({roots, name, ignore, tmp}) => remove({
+          roots: parseList(roots),
+          removals: parseList(name),
+          ignore: parseList(ignore),
+          tmp,
+        }),
+      ],
+      upgrade: [
+        `Upgrades dependencies
 
-  let done = false;
-  while (!done) {
-    const used = {};
-    Object.keys(top).map(name => {
-      used[`${name}@${top[name]}`] = true;
-    });
-    Object.keys(meta.resolutions || {}).forEach(pattern => {
-      const [name] = pattern.match(/(@[^\/]+\/)?[^\/]+$/i);
-      used[`${name}@${meta.resolutions[pattern]}`] = true;
-    });
-    Object.keys(deps).forEach(dep => {
-      Object.keys(deps[dep].dependencies || {}).forEach(name => {
-        used[`${name}@${deps[dep].dependencies[name]}`] = true;
-      });
-    });
-    done = true;
-    Object.keys(deps).forEach(dep => {
-      if (!(dep in used)) {
-        done = false;
-        delete deps[dep];
-      }
-    });
-  }
-}
+        [upgrades]           pipe separated list of deps (in foo@^0.0.0 format)
+        --roots [roots]      pipe separated list of dirs
+        --from [from]        pipe separated list of dep ranges (in foo@^1.0.0) to which upgrade should apply
+        --ignore [ignore]    pipe separated list of package names to ignore
+        --tmp [tmp]          folder to download temp files to`,
+        async ({roots, name, from, ignore, tmp}) => upgrade({
+          roots: parseList(roots),
+          additions: parseEntries(name),
+          from: parseEntries(from),
+          ignore: parseList(ignore),
+          tmp,
+        }),
+      ],
+      sync: [
+        `Dedupes dependencies within the same semver range
 
-async function containing(dirs, files) {
-  const found = await Promise.all(
-    dirs.map(async dir => {
-      return Promise.all(
-        files.map(async file => await exists(`${dir}/${file}`))
-      ).then(found => found.indexOf(false) === -1);
-    })
-  );
-  const output = [];
-  dirs.forEach((dir, i) => {
-    if (found[i]) output.push(dir);
-  });
-  return output;
-}
+        --roots [roots]      pipe separated list of dirs
+        --ignore [ignore]    pipe separated list of package names to ignore
+        --tmp [tmp]          folder to download temp files to`,
+        async ({roots, ignore, tmp}) => sync({
+          roots: parseList(roots),
+          ignore: parseList(ignore),
+          tmp,
+        }),
+      ],
+      merge: [
+        `Merge lockfiles
 
-async function chunk(items, fn) {
-  const size = cpus().length;
-  for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(fn));
-  }
-}
+        --roots [roots]      pipe separated list of dirs
+        --out [out]          output merged lockfile to this dir
+        --ignore [ignore]    pipe separated list of package names to ignore
+        --tmp [tmp]          folder to download temp files to`,
+        async ({roots, out, ignore, tmp}) => merge({
+          roots: parseList(roots),
+          out,
+          ignore: parseList(ignore),
+          tmp,
+        }),
+      ],
+      check: [
+        `Check if top-level dep versions match
 
-const readNpmrc = async dir => {
-  const npmrcs = await findNpmrcs(dir);
-  const configs = npmrcs.map(npmrc => {
-    return npmrc
-      .replace(/[#;].*[\r\n]/gm, '')
-      .split('\n')
-      .reduce((memo, line) => {
-        const [key, ...rest] = line.split('=');
-        // TODO handle `key[] = value` syntax
-        if (key) {
-          memo[key.trim()] = rest
-            .join('=')
-            .replace(/\$\{([^}]+)\}/g, (match, key) => process.env[key]);
-        }
-        return memo;
-      }, {});
-  });
-  return Object.assign({}, ...configs.reverse());
-};
-
-const findNpmrcs = async dir => {
-  const npmrcs = [await read(`${dir}/.npmrc`, 'utf8').catch(() => '')];
-  if (resolve(`${dir}/..`) !== '/')
-    npmrcs.push(...(await findNpmrcs(`${dir}/..`)));
-  return npmrcs;
-};
-
-const download = async (deps, tmp) => {
-  const cmd = `yarn add ${deps.join(' ')}`;
-  const opts = {cwd: tmp, maxBuffer: 1e9};
-  await exec(cmd, opts).catch(() => exec(cmd, opts));
-}
-
-const update = (meta, type, name, version, from) => {
-  if (meta[type] && meta[type][name]) {
-    const min = semver.minVersion(meta[type][name]);
-    const inRange = !from || semver.satisfies(min, from);
-    if (inRange) meta[type][name] = version;
-  }
-};
-
-// API
-async function addDeps({roots, deps, tmp = '/tmp'}) {
-  if (deps.length === 0) return;
-
-  tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
-
-  const metas = await Promise.all(
-    roots.map(async root => {
-      return JSON.parse(await read(`${root}/package.json`, 'utf8'));
-    })
-  );
-  const configs = await Promise.all(
-    roots.map(async root => {
-      return await readNpmrc(root);
-    })
-  );
-  const resolutions = metas.reduce(
-    (memo, meta) => ({...memo, ...meta.resolutions}),
-    {}
-  );
-
-  await exec(`mkdir -p ${tmp}`);
-  await write(
-    `${tmp}/.npmrc`,
-    Object.keys(configs)
-      .map(key => `${key}=${configs[key]}`)
-      .join('\n')
-  );
-  await write(`${tmp}/package.json`, JSON.stringify({resolutions}));
-
-  const args = deps.map(({dep, version, type}) => {
-    return `${dep}${version ? `@${version}` : ''}`;
-  });
-  await download(args, tmp);
-  const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
-  deps.map(item => {
-    item.version = meta.dependencies[item.dep];
-  });
-  const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
-  await exec(`rm -rf ${tmp}`);
-
-  return Promise.all(
-    roots.map(async (root, i) => {
-      const meta = metas[i];
-      deps.forEach(({dep, version, type}) => {
-        if (meta.dependencies && meta.dependencies[dep])
-          meta.dependencies[dep] = version;
-        if (meta.devDependencies && meta.devDependencies[dep])
-          meta.devDependencies[dep] = version;
-        if (meta.peerDependencies && meta.peerDependencies[dep])
-          meta.peerDependencies[dep] = version;
-        if (meta.optionalDependencies && meta.optionalDependencies[dep])
-          meta.optionalDependencies[dep] = version;
-        if (!meta[type]) meta[type] = {};
-        meta[type][dep] = version;
-      })
-      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
-
-      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-      f.object = sort({...f.object, ...added.object});
-      prune(meta, f.object);
-      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
-    })
-  );
-}
-async function add({roots, dep, version, type = 'dependencies', tmp}) {
-  return addDeps({roots, deps: [{dep, version, type}], tmp});
-}
-
-async function upgrade({roots, dep, version, from, tmp = '/tmp'}) {
-  tmp = `${tmp}/yarn-utils-${Math.random() * 1e17}`;
-  await exec(`mkdir -p ${tmp}`);
-  await write(`${tmp}/package.json`, '{}');
-  await exec(`yarn add ${dep}${version ? `@${version}` : ''}`, {cwd: tmp, maxBuffer: 1e9});
-  const meta = JSON.parse(await read(`${tmp}/package.json`, 'utf8'));
-  version = meta.dependencies[dep];
-  const added = lockfile.parse(await read(`${tmp}/yarn.lock`, 'utf8'));
-  await exec(`rm -rf ${tmp}`);
-
-  return Promise.all(
-    roots.map(async root => {
-      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-      update(meta, 'dependencies', dep, version, from);
-      update(meta, 'devDependencies', dep, version, from);
-      update(meta, 'peerDependencies', dep, version, from);
-      update(meta, 'optionalDependencies', dep, version, from);
-      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
-
-      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-      f.object = sort({...f.object, ...added.object});
-      prune(meta, f.object);
-      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
-    })
-  );
-}
-
-async function remove({roots, dep}) {
-  return Promise.all(
-    roots.map(async root => {
-      const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-
-      if (meta.dependencies && meta.dependencies[dep])
-        delete meta.dependencies[dep];
-      if (meta.devDependencies && meta.devDependencies[dep])
-        delete meta.devDependencies[dep];
-      if (meta.peerDependencies && meta.peerDependencies[dep])
-        delete meta.peerDependencies[dep];
-      if (meta.optionalDependencies && meta.optionalDependencies[dep])
-        delete meta.optionalDependencies[dep];
-      await write(`${root}/package.json`, JSON.stringify(meta, null, 2));
-
-      const f = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-      prune(meta, f.object);
-      await write(`${root}/yarn.lock`, lockfile.stringify(f.object), 'utf8');
-    })
-  );
-}
-
-async function dedupe({roots, onChange}) {
-  const dirs = await containing(roots, ['yarn.lock']);
-  const data = await Promise.all(
-    dirs.map(async dir => ({
-      meta: `${dir}/package.json`,
-      file: `${dir}/yarn.lock`,
-      lockfile: lockfile.parse(await read(`${dir}/yarn.lock`, 'utf8')),
-    }))
-  );
-
-  const versions = {};
-  const newDeps = {};
-  data.forEach(d => {
-    Object.keys(d.lockfile.object).forEach(key => {
-      const dep = d.lockfile.object[key];
-      const [, name, version] = key.match(/^(.+?)@(.+?)$/);
-      if (!versions[name]) versions[name] = {};
-      if (
-        !versions[name][version] ||
-        semver.gt(dep.version, versions[name][version].version)
-      ) {
-        versions[name][version] = dep;
-
-        const collect = function(key, deps = {}) {
-          if (key in newDeps) return;
-
-          newDeps[key] = {};
-          Object.keys(deps).forEach(dep => {
-            const depKey = `${dep}@${deps[dep]}`;
-            newDeps[key][depKey] = d.lockfile.object[depKey];
-            if (!newDeps[key][depKey]) {
-              throw new Error(
-                `${d.file} is corrupted (missing entry for ${depKey}, which is a dependency of ${key}). Regenerate the yarn.lock file`
-              );
-            }
-            const dependencies = {...newDeps[key][depKey].dependencies};
-            collect(depKey, dependencies);
+        --roots [roots]      pipe separated list of dirs`,
+        async ({roots}) => {
+          const report = check({
+            roots: parseList(roots),
           });
-        }
-        collect(key, d.lockfile.object[key].dependencies);
-      }
-    });
-  });
-  Object.keys(versions).forEach(name => {
-    Object.keys(versions[name]).forEach(key => {
-      Object.keys(versions[name]).forEach(version => {
-        const actualName = key.startsWith('npm:')
-          ? key.match(/npm:(.[^@]*)/)[1]
-          : name;
-        if (
-          name === actualName &&
-          semver.satisfies(versions[name][key].version, version) &&
-          semver.gte(
-            versions[name][key].version,
-            versions[name][version].version
-          )
-        ) {
-          versions[name][version] = versions[name][key];
-        }
-      });
-    });
-  });
-
-  Object.keys(versions).forEach(name => {
-    Object.keys(versions[name]).forEach(version => {
-      data.forEach(d => {
-        const key = `${name}@${version}`;
-        if (d.lockfile.object[key]) {
-          if (typeof onChange === 'function' && versions[name][version] !== d.lockfile.object[key]) {
-            onChange(key, versions[name][version], d.lockfile.object[key]);
-          }
-          d.lockfile.object[key] = versions[name][version];
-          Object.keys(newDeps[key]).forEach(depKey => {
-            if (
-              !d.lockfile.object[depKey] ||
-              semver.lt(
-                d.lockfile.object[depKey].version,
-                newDeps[key][depKey].version
-              )
-            ) {
-              if (typeof onChange === 'function' && newDeps[key][depKey] !== d.lockfile.object[depKey]) {
-                onChange(depKey, newDeps[key][depKey], d.lockfile.object[depKey]);
-              }
-              d.lockfile.object[depKey] = newDeps[key][depKey];
-            }
-          });
-        }
-      });
-    });
-  });
-
-  return Promise.all(
-    data.map(async d => {
-      const meta = JSON.parse(await read(d.meta, 'utf8'));
-      prune(meta, d.lockfile.object);
-      await write(d.file, lockfile.stringify(d.lockfile.object), 'utf8');
-    })
+          console.log(report);
+        },
+      ],
+    },
+    async () => {}
   );
 }
-async function optimize({roots}) {
-  return dedupe({roots});
-}
 
-async function sync({roots, ignore = [], tmp}) {
-  const addAll = async (root, meta, object, type, ignore) => {
-    const names = Object.keys(meta[type] || {}).filter(name => {
-      const needsDownload = !object[`${name}@${meta[type][name]}`];
-      const shouldDownload = !ignore.find(ignored => ignored === name);
-      return needsDownload && shouldDownload;
-    });
-    const deps = names.map(name => {
-      return {dep: name, version: meta[type][name], type};
-    });
-    await addDeps({roots: [root], deps, tmp});
-  };
-  await chunk(roots, async root => {
-    if (!(await exists(`${root}/yarn.lock`))) {
-      await write(`${root}/yarn.lock`, '', 'utf8');
-    }
-    const meta = JSON.parse(await read(`${root}/package.json`, 'utf8'));
-    const {object} = lockfile.parse(await read(`${root}/yarn.lock`, 'utf8'));
-    await addAll(root, meta, object, 'dependencies', ignore);
-    await addAll(root, meta, object, 'devDependencies', ignore);
-  });
-}
-
-async function check({roots}) {
-  const versions = {};
-  function collectVersions(meta, type) {
-    Object.keys(meta[type] || {}).forEach(name => {
-      const version = meta[type][name];
-      if (!versions[name]) versions[name] = {};
-      if (!versions[name][version]) versions[name][version] = [];
-      versions[name][version].push(meta.name);
-      versions[name][version].sort();
-    });
-  }
-
-  const dirs = await containing(roots, ['package.json']);
-  await Promise.all(
-    dirs.map(async dir => {
-      const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
-      collectVersions(meta, 'dependencies');
-      collectVersions(meta, 'devDependencies');
-      collectVersions(meta, 'peerDependencies');
-      collectVersions(meta, 'optionalDependencies');
-    })
-  );
-  Object.keys(versions).forEach(name => {
-    if (Object.keys(versions[name]).length === 1) delete versions[name];
-  });
-
-  return versions;
-}
-
-async function merge({roots, out, frozenLockfile}) {
-  await dedupe({
-    roots,
-    onChange(dep, value, old) {
-      if (frozenLockfile) {
-        throw new Error(`Deduping transitive dependency ranges is not allowed when in frozen lockfile mode. Update your lockfile in ${roots}`);
-      }
-    }
-  });
-
-  let deps = {};
-  let lock = {};
-  let resolutions = {};
-  const dirs = await containing(roots, ['package.json', 'yarn.lock']);
-  await Promise.all(
-    dirs.map(async dir => {
-      const meta = JSON.parse(await read(`${dir}/package.json`, 'utf8'));
-      deps = {...deps, ...meta.dependencies, ...meta.devDependencies};
-      resolutions = {...resolutions, ...meta.resolutions};
-
-      const f = lockfile.parse(await read(`${dir}/yarn.lock`, 'utf8'));
-      lock = sort({...lock, ...f.object});
-    })
-  );
-
-  await exec(`mkdir -p ${out}`);
-  await write(
-    `${out}/package.json`,
-    JSON.stringify({dependencies: deps, resolutions}, null, 2),
-    'utf8'
-  );
-  await write(`${out}/yarn.lock`, lockfile.stringify(lock), 'utf8');
-}
-
-module.exports = {
-  add,
-  upgrade,
-  remove,
-  optimize,
-  sync,
-  check,
-  merge,
-  readNpmrc,
+const parseEntries = (additions, type = 'dependencies') => {
+  return additions.split('|').map(a => {
+    const [name, range] = a.split('@');
+    return {name, range, type};
+  })
 };
+
+const parseList = string => string.split('|').filter(Boolean);
+
+module.exports = {runCLI, add, remove, upgrade, sync, merge, check};

@@ -21,61 +21,132 @@ When working from a development machine within a large scale monorepo, it's pref
 
 ### API
 
+```js
+const {add, upgrade, remove, sync, check, merge} = require('yarn-utilities');
 ```
-const {add, upgrade, remove, optimize, sync, check, merge} = require('yarn-utilities');
-```
+
+All commands except `check` will generate up-to-date lockfiles. This means all of those commands may download packages that are not yet listed in the lockfiles.
 
 #### add
 
-Adds a dependency
+Adds dependencies
 
-- `type Add = ({roots: Array<string>, dep: string, version: string, type: string, tmp: string}) => Promise<void>`
+- ```js
+  type Add = ({
+    roots: Array<string>,
+    additions: Array<Entry>,
+    ignore?: Array<string>,
+    tmp?: string
+  }) => Promise<void>
+
+  type Entry = {name: string, range: string, type: string}
+  ```
   - roots - List of project folders
-  - dep - Name of dependency
-  - version - Version to install. Defaults to latest
-  - type - whether to add as `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. Defaults to `dependencies`
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - additions - List of dependencies to add
+    - name - The name of each dependency
+    - range - A semver version range. If the semver version range is omitted, it defaults to the latest version
+    - type - `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` or `resolutions`. Defaults to `dependencies`
+  - ignore - Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `[]`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### upgrade
 
-Upgrades a dependency
+Upgrades dependencies
 
-- `type Upgrade = ({roots: Array<string>, dep: string, version: string, from: string, tmp: string}) => void`
+- ```js
+  type Upgrade = ({
+    roots: Array<string>,
+    dep: string, version: string,
+    additions: Array<Entry>,
+    from: Array<Entry>,
+    ignore: Array<string>,
+    tmp: string,
+  }) => Promise<void>
+
+  type Entry = {name: string, range: string, type: string}
+  ```
   - roots - List of project folders
-  - dep - Name of dependency
-  - version - Version to install. Defaults to latest
-  - from - Upgrade only if the minimum version of the current range satisfies the `from` range
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - additions - List of dependencies to add
+    - name - The name of each dependency
+    - range - A semver version range. If the semver version range is omitted, it defaults to the latest version
+    - type - `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` or `resolutions`. Defaults to `dependencies`
+  - from - Deps in this list are only upgraded if their current version satisfies the specified range. Defaults to `[]`
+  - ignore - Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `[]`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### remove
 
 Removes a dependency
 
-- `type Remove = ({roots: Array<string>, dep: string}) => Promise<void>`
+- ```js
+  type Remove = ({
+    roots: Array<string>,
+    removals: Array<string>,
+    ignore?: Array<string>,
+    tmp?: string,
+  }) => Promise<void>;
+  ```
   - roots - List of project folders
-  - dep - Name of dependency
-
-#### optimize
-
-Synchronize transitive deps across multiple projects and dedupe versions in matching ranges
-
-- `type Optimize = ({roots: Array<string>}) => Promise<void>`
-  - roots - List of project folders
+  - removals - List of dependency names to remove
+  - ignore - Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `[]`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### sync
 
-Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
+Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited.
 
-- `type Sync = ({roots: Array<string>, ignore: Array<string>, tmp: string}) => Promise<void>`
+- ```js
+  type Sync = ({
+    roots: Array<string>,
+    ignore?: Array<string>,
+    tmp?: string,
+  }) => Promise<void>;
+  ```
   - roots - List of project folders
-  - ignore - List of project names to ignore
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - ignore - Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `[]`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
+
+#### merge
+
+Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
+
+- ```js
+  export type Merge = ({
+    roots: Array<string>,
+    out: string,
+    ignore?: Array<string>,
+    frozenLockfile?: boolean,
+    tmp?: string,
+  }) => Promise<void>;
+  ```
+  - roots - List of project folders
+  - out - Save resulting `package.json` and `yarn.lock` to this folder
+  - ignore - Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `[]`
+  - frozenLockfile - If true and a lockfile change is required, throws an error. Useful for blocking CI in case of a commit with outdated lockfiles. Defaults to `false`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
+
+Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
 
 #### check
 
 Returns a report of what dependencies have multiple versions being used across projects
 
-```js
+- ```js
+  type Check = ({
+    roots: Array<string>,
+  }) => Report;
+
+  type Report = {
+    [string]: {
+      [string]: Array<string>
+    }
+  };
+  ```
+  - roots - List of project folders
+
+Reports look like this:
+
+```json
 // sample report
 {
   "my-dependency": {
@@ -86,20 +157,6 @@ Returns a report of what dependencies have multiple versions being used across p
   }
 }
 ```
-
-- `type Check = ({roots: Array<string>}) => Promise<{[string]: {[string]: Array<string>}}>`
-  - roots - List of project folders
-
-#### merge
-
-Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
-
-- `type Merge = ({roots: Array<string>, out: string, frozenLockfile: boolean}) => Promise<void>`
-  - roots - List of project folders
-  - out - Save resulting `package.json` and `yarn.lock` to this folder
-  - frozenLockfile - If true and a lockfile change is required to dedupe transitive deps, throws an error. Useful for blocking CI in case of a commit with outdated lockfiles.
-
-Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
 
 ---
 
@@ -107,56 +164,71 @@ Note that if projects use different versions of the same top-level dependency, t
 
 CLI commands and args mirror the API docs above
 
+All commands except `check` will generate up-to-date lockfiles. This means all of those commands may download packages that are not yet listed in the lockfiles.
+
 #### yarn-utilities add
 
 Adds a dependency
 
-- `yarn-utilities add --roots [roots] --dep [dep] --version [version] --type [type] --tmp [tmp]`
+- `yarn-utilities add [additions] --roots [roots] --type [type] --ignore [ignore] --tmp [tmp]`
+  - additions - A pipe separated list of dependencies (in `foo@^1.0.0` format). If the semver version range is omitted, it defaults to the latest version
   - roots - A pipe separated list of project folders
-  - dep - Name of dependency
-  - version - Version to install. Defaults to latest
-  - type - whether to add as `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. Defaults to `dependencies`
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - type - `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` or `resolutions`. Defaults to `dependencies`
+  - ignore - A pipe separated list of dependency names. Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `''`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### yarn-utilities upgrade
 
 Upgrades a dependency
 
-- `yarn-utilities upgrade --roots [roots] --dep [dep] --version [version] --tmp [tmp]`
+- `yarn-utilities upgrade [upgrades] --roots [roots] --from [from] --ignore [ignore] --tmp [tmp]`
+  - upgrades - A pipe separated list of dependencies (in `foo@^1.0.0` format). If the semver version range is omitted, it defaults to the latest version
   - roots - A pipe separated list of project folders
-  - dep - Name of dependency
-  - version - Version to install. Defaults to latest
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - from - A pipe separated list of dependency names. Deps in this list are only upgraded if their current version satisfies the specified range. Defaults to `''`
+  - ignore - A pipe separated list of dependency names. Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `''`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### yarn-utilities remove
 
 Removes a dependency
 
-- `yarn-utilities remove --roots [roots] --dep [dep]`
+- `yarn-utilities remove [removals] --roots [roots] --ignore [ignore] --tmp [tmp]`
+  - removals - A pipe separated list of dependency names to remove
   - roots - A pipe separated list of project folders
-  - dep - Name of dependency
-
-#### yarn-utilities optimize
-
-Synchronize transitive deps across multiple projects and dedupe versions in matching ranges
-
-- `yarn-utilities optimize --roots [roots]`
-  - roots - A pipe separated list of project folders
+  - ignore - A pipe separated list of dependency names. Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `''`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
 
 #### yarn-utilities sync
 
 Ensure yarn.lock reflects package.json. Useful for updating the lockfile after package.json is manually edited
 
-- `yarn-utilities optimize --roots [roots] --ignore [ignore] --tmp [tmp]`
+- `yarn-utilities sync --roots [roots] --ignore [ignore] --tmp [tmp]`
   - roots - A pipe separated list of project folders
-  - ignore - A pipe separated list of project names to ignore
-  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Default: `/tmp`
+  - ignore - A pipe separated list of dependency names. Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `''`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
+
+#### yarn-utilities merge
+
+Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
+
+- `yarn-utilities merge --roots [roots] --out [out] --ignore [ignore] --tmp [tmp]`
+  - roots - A pipe separated list of project folders
+  - out - Save resulting `package.json` and `yarn.lock` to this folder
+  - ignore - A pipe separated list of dependency names. Deps in package.json whose names are included in this list won't be included in the updated yarn.lock. Defaults to `''`
+  - tmp - A folder to use as a tmp directory for newly downloaded packages. Note that this folder will be deleted when the function ends. Defaults to `/tmp`
+
+Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)
 
 #### yarn-utilities check
 
 Prints to stdout a report of what dependencies have multiple versions being used across projects
 
-```js
+- `yarn-utilities check --roots [roots]`
+  - roots - A pipe separated list of project folders
+
+Reports look like this:
+
+```json
 // sample report
 {
   "my-dependency": {
@@ -167,16 +239,3 @@ Prints to stdout a report of what dependencies have multiple versions being used
   }
 }
 ```
-
-- `yarn-utilities check --roots [roots]`
-  - roots - A pipe separated list of project folders
-
-#### yarn-utilities merge
-
-Merges dependencies from multiple projects' `package.json`/`yarn.lock` into a new folder
-
-- `yarn-utilities merge --roots [roots] --out [out]`
-  - roots - A pipe separated list of project folders
-  - out - Save resulting `package.json` and `yarn.lock` to this folder
-
-Note that if projects use different versions of the same top-level dependency, the output package.json will only list one of them (although yarn.lock will list all of them)

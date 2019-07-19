@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "has": "0.0.1",
+    "is-number": "0.1.0"
+  },
+  "resolutions": {
+    "function-bind": "npm:no-bugs@1.0.0"
+  }
+}
