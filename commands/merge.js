@@ -32,6 +32,8 @@ const merge /*: Merge */ = async ({
     frozenLockfile,
     tmp,
   });
+  if (frozenLockfile && !diffMetadata(metas, changed)) throwEditError();
+  else await writeMetadata({metas: changed});
   const output = /*:: await */ await getMetadata({roots: [out]});
   const augmented = changed.reduce((output, meta) => {
     meta.dir = out;
